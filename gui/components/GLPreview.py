@@ -127,7 +127,7 @@ class GLPreview(QtWidgets.QWidget):
                 pos=pts1,
                 color=(254/255.0, 204/255.0, 92/255.0, 1.0),  # #fecc5c
                 size=1.0,
-                pxMode=False,
+                pxMode=True,
                 glOptions='opaque',
             )
             self.view.addItem(self.scatter1)
