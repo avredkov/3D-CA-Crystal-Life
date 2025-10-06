@@ -1,0 +1,40 @@
+{
+  "lattice_size_x": 128,
+  "lattice_size_y": 128,
+  "lattice_size_z": 128,
+  "num_iterations": 2000,
+  "data_snapshot_interval_steps": 100,
+  "xyz_snapshot_interval_steps": 100,
+  "xyz_save_last_only": false,
+  "snapshot_schedule_mode": "linear",
+  "log_snapshot_count": 100,
+  "initial_occupancy_fraction": 0.05,
+  "output_dir": "./output/example_run/",
+  "enable_early_termination": false,
+  "early_termination_window": 5,
+  "early_termination_tolerance": 0.03,
+  "cuda_device_index": 0,
+  "recipe_values": {
+    "Pk": 1.0,
+    "Ps": 0.2,
+    "Pn": 0.01,
+    "Pke": 0.0,
+    "Pse": 0.0,
+    "Pne": 0.0
+  },
+  "ruleset_name": "Default",
+  "enable_event_statistics": true,
+  "enable_surface_state_statistics": true,
+  "enable_coordination_statistics": true,
+  "enable_age_calculation": false,
+  "walls": {
+    "wall_x_min": false,
+    "wall_x_max": false,
+    "wall_y_min": false,
+    "wall_y_max": false,
+    "wall_z_min": false,
+    "wall_z_max": false
+  },
+  "init": { "mode": "single", "seed_edge_length": 4 }
+}
+
