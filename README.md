@@ -1,6 +1,6 @@
-## 3D Cellular Automaton (CA) + Monte Carlo Crystal Growth Simulator
+## 3D Cellular Automaton (CA) + Monte Carlo Crystal Growth Simulator <i> "Crystal Life" </i>
 
-A GPU-accelerated 3D cellular automaton for crystal growth simulation described in the paper by the paper A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. "Under the Kink's rule: The Way of the Crystal".
+A GPU-accelerated 3D cellular automaton for crystal growth simulation described in the paper by the paper <b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i><b>.
 The simulation evolves a lattice of atoms with CUDA kernels while exporting time-series snapshots and quantitative description of crystal growth and dissoultion processes for analysis. All behavior is configured via `config.json` and modular “rulesets” in `rules/`.
 
 ### Quick start
@@ -14,26 +14,6 @@ python CA3D.py
 ```
 
 Outputs will be written under the configured `output_dir` directory.
-
-### Running with custom config paths (headless and GUI)
-
-- Headless (recommended):
-
-```bash
-# Use an explicit config path anywhere on your system
-python CA3D.py --config "D:/path/to/configs/run1.json"
-
-# Alternatively, set an env var (picked up automatically)
-# Windows (PowerShell)
-$env:CA3D_CONFIG = "D:/path/to/configs/run1.json"; python CA3D.py
-# Linux/macOS (bash)
-CA3D_CONFIG="/home/user/configs/run1.json" python CA3D.py
-```
-
-- GUI:
-  - In the Simulation tab, use the "Config file" controls to Load any `.json` (it can live outside the project).
-  - When you press Start, the GUI runs `CA3D.py` with that exact path, so your external config is used as-is.
-  - Relative output directories like `./output/Dendrite` are resolved from the app working directory and created if missing.
 
 ### Installation & requirements
 
@@ -625,6 +605,26 @@ At simulation start, the engine resolves all symbols with the parameter map, eva
 
 Both recipes use the neighborhood encoding described earlier (center + 6 faces, base-3 index). See `rules/Default.py` and `rules/Default_with_3D_nucleation.py` for complete symbolic sources.
 
+### Running with custom config paths (headless and GUI)
+
+- Headless (recommended):
+
+```bash
+# Use an explicit config path anywhere on your system
+python CA3D.py --config "D:/path/to/configs/run1.json"
+
+# Alternatively, set an env var (picked up automatically)
+# Windows (PowerShell)
+$env:CA3D_CONFIG = "D:/path/to/configs/run1.json"; python CA3D.py
+# Linux/macOS (bash)
+CA3D_CONFIG="/home/user/configs/run1.json" python CA3D.py
+```
+
+- GUI:
+  - In the Simulation tab, use the "Config file" controls to Load any `.json` (it can live outside the project).
+  - When you press Start, the GUI runs `CA3D.py` with that exact path, so your external config is used as-is.
+  - Relative output directories like `./output/Dendrite` are resolved from the app working directory and created if missing.
+
 ## Visualizing XYZ outputs
 
 The simulator writes `system_evolution.xyz` and optionally surface-state and event diagnostics. You can visualize XYZ files with:
@@ -668,6 +668,7 @@ Set to `false` to keep periodic wrapping in that direction.
 
 ## Citation / Contact
 
-Please refer to the paper A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. "Under the Kink's rule: The Way of the Crystal"  (<i>in press</i>)
+Please refer to the paper<b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i><b> (<i>in press</i>).
+
 For issues, please contact the authors.
 
