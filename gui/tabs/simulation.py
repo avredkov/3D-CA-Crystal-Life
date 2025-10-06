@@ -393,11 +393,6 @@ class SimulationTab(QtWidgets.QWidget):
         self.init_mode.currentTextChanged.connect(self._on_init_mode_changed)
         # populate ruleset dropdown on startup
         self._refresh_rulesets()
-        # refresh when switching into Ruleset tab
-        try:
-            self.tabs.currentChanged.connect(self._on_tab_changed)
-        except Exception:
-            pass
 
         # Live validation: connect basic fields
         for sp in (self.size_x, self.size_y, self.size_z, self.num_iter, self.data_snap, self.xyz_snap, self.log_count):
@@ -662,15 +657,17 @@ class SimulationTab(QtWidgets.QWidget):
                 pass
         return w
 
-    def _on_tab_changed(self, index: int) -> None:
+    def on_activated(self) -> None:
+        """Refresh recipe list and parameters when Simulation tab becomes active."""
         try:
-            if hasattr(self, "_rules_tab_index") and index == self._rules_tab_index:
-                prev = self.ruleset_name.currentText()
-                self._refresh_rulesets()
-                if prev:
-                    idx = self.ruleset_name.findText(prev)
-                    if idx >= 0:
-                        self.ruleset_name.setCurrentIndex(idx)
+            prev = self.ruleset_name.currentText()
+            self._refresh_rulesets()
+            if prev:
+                idx = self.ruleset_name.findText(prev)
+                if idx >= 0:
+                    self.ruleset_name.setCurrentIndex(idx)
+            # Ensure probabilities reflect the current selection
+            self._populate_probabilities_table()
         except Exception:
             pass
 
@@ -762,14 +759,14 @@ class SimulationTab(QtWidgets.QWidget):
     def _build_init_mode_pages(self) -> None:
         # single
         w_single = QtWidgets.QWidget(); gl = QtWidgets.QGridLayout(w_single)
-        self.single_seed_edge = QtWidgets.QSpinBox(); self.single_seed_edge.setRange(1, 1024)
+        self.single_seed_edge = QtWidgets.QSpinBox(); self.single_seed_edge.setRange(2, 1024)
         self.single_seed_edge.setToolTip("Edge length of the single cubic seed (config: init.seed_edge_length)")
         lbl_s_se = QtWidgets.QLabel("Seed edge length (cells)"); lbl_s_se.setToolTip("config: init.seed_edge_length")
         gl.addWidget(lbl_s_se, 0, 0); gl.addWidget(self.single_seed_edge, 0, 1)
         self._mode_to_index["single"] = self.init_mode_stack.addWidget(w_single)
         # multiple
         w_multiple = QtWidgets.QWidget(); gm = QtWidgets.QGridLayout(w_multiple)
-        self.mult_seed_edge = QtWidgets.QSpinBox(); self.mult_seed_edge.setRange(1, 1024)
+        self.mult_seed_edge = QtWidgets.QSpinBox(); self.mult_seed_edge.setRange(2, 1024)
         self.mult_seed_edge.setToolTip("Edge length of each seed (config: init.seed_edge_length)")
         self.mult_num_seeds = QtWidgets.QSpinBox(); self.mult_num_seeds.setRange(1, 1_000_000)
         self.mult_num_seeds.setToolTip("Number of seeds placed randomly (config: init.num_seeds)")
@@ -796,9 +793,9 @@ class SimulationTab(QtWidgets.QWidget):
         w_pair = QtWidgets.QWidget(); gp = QtWidgets.QGridLayout(w_pair)
         self.pair_center_sep = QtWidgets.QSpinBox(); self.pair_center_sep.setRange(0, 1_000_000)
         self.pair_center_sep.setToolTip("Distance between seed centers (config: init.center_separation)")
-        self.pair_seed1_edge = QtWidgets.QSpinBox(); self.pair_seed1_edge.setRange(1, 1024)
+        self.pair_seed1_edge = QtWidgets.QSpinBox(); self.pair_seed1_edge.setRange(2, 1024)
         self.pair_seed1_edge.setToolTip("Edge length of seed 1 (config: init.seed1_edge_length)")
-        self.pair_seed2_edge = QtWidgets.QSpinBox(); self.pair_seed2_edge.setRange(1, 1024)
+        self.pair_seed2_edge = QtWidgets.QSpinBox(); self.pair_seed2_edge.setRange(2, 1024)
         self.pair_seed2_edge.setToolTip("Edge length of seed 2 (config: init.seed2_edge_length)")
         lbl_p_sep = QtWidgets.QLabel("Center separation (cells)"); lbl_p_sep.setToolTip("config: init.center_separation")
         lbl_p_s1 = QtWidgets.QLabel("Seed 1 edge length (cells)"); lbl_p_s1.setToolTip("config: init.seed1_edge_length")
@@ -831,6 +828,8 @@ class SimulationTab(QtWidgets.QWidget):
         try:
             idx = self._mode_to_index.get(mode, 0)
             self.init_mode_stack.setCurrentIndex(idx)
+            # Reset fields for the selected mode to model defaults
+            self._apply_init_mode_defaults(mode)
             self._on_field_changed()
         except Exception:
             pass
@@ -883,6 +882,45 @@ class SimulationTab(QtWidgets.QWidget):
             return {"mode": mode, "init_python_code": self.py_code.toPlainText()}
         # none
         return {"mode": "none"}
+
+    def _apply_init_mode_defaults(self, mode: str) -> None:
+        """
+        Reset the widgets of the given initialization mode to their
+        pydantic model default values.
+        """
+        try:
+            from config import SingleInitConfig, MultipleInitConfig, FlatBottomInitConfig, PythonCodeInitConfig, NoneInitConfig, SteppedBottomInitConfig, PairInitConfig, MoundsInitConfig
+            if mode == "single":
+                m = SingleInitConfig(mode="single")
+                self.single_seed_edge.setValue(int(m.seed_edge_length))
+            elif mode == "multiple":
+                m = MultipleInitConfig(mode="multiple")
+                self.mult_seed_edge.setValue(int(m.seed_edge_length))
+                self.mult_num_seeds.setValue(int(m.num_seeds))
+            elif mode == "flat_bottom":
+                m = FlatBottomInitConfig(mode="flat_bottom")
+                self.flat_num_layers.setValue(int(m.num_flat_layers))
+            elif mode == "stepped_bottom":
+                m = SteppedBottomInitConfig(mode="stepped_bottom")
+                self.step_num_terraces.setValue(int(m.num_terraces))
+            elif mode == "pair":
+                m = PairInitConfig(mode="pair")
+                self.pair_center_sep.setValue(int(m.center_separation))
+                self.pair_seed1_edge.setValue(int(m.seed1_edge_length))
+                self.pair_seed2_edge.setValue(int(m.seed2_edge_length))
+            elif mode == "mounds":
+                m = MoundsInitConfig(mode="mounds")
+                self.mounds_w.setValue(float(m.w))
+                self.mounds_amp.setValue(int(m.amplitude))
+            elif mode == "python_code":
+                m = PythonCodeInitConfig(mode="python_code")
+                self.py_code.setPlainText(str(m.init_python_code or ""))
+            elif mode == "none":
+                _ = NoneInitConfig(mode="none")
+                # No fields to reset
+        except Exception:
+            # Silently ignore resets if any widget is missing for a mode
+            pass
 
     def _on_start(self) -> None:
         try:

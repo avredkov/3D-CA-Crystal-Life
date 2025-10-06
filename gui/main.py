@@ -28,11 +28,25 @@ class MainWindow(QtWidgets.QMainWindow):
             self.setWindowIcon(QtGui.QIcon(str(icon_path)))
 
         tabs = QtWidgets.QTabWidget()
-        tabs.addTab(SimulationTab(), "Simulation")
+        sim = SimulationTab()
+        tabs.addTab(sim, "Simulation")
         tabs.addTab(AnalysisTab(), "Analysis")
         tabs.addTab(RulesTab(), "Rule recipes")
         tabs.addTab(AboutTab(), "About")
         self.setCentralWidget(tabs)
+
+        # Refresh recipe list/params only when Simulation tab becomes active
+        def _on_tab_activated(index: int) -> None:
+            try:
+                if tabs.widget(index) is sim:
+                    if hasattr(sim, "on_activated"):
+                        sim.on_activated()
+            except Exception:
+                pass
+        try:
+            tabs.currentChanged.connect(_on_tab_activated)
+        except Exception:
+            pass
 
 
 def main() -> int:

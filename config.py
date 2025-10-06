@@ -38,15 +38,15 @@ class SteppedBottomInitConfig(BaseModel):
 
 class PairInitConfig(BaseModel):
     mode: Literal["pair"]
-    center_separation: int = 0
+    center_separation: int = 12
     seed1_edge_length: int = 2
     seed2_edge_length: int = 2
 
 
 class MoundsInitConfig(BaseModel):
     mode: Literal["mounds"]
-    w: float = 0.05  # spatial frequency (radians per cell)
-    amplitude: int = 10  # mound height in cells
+    w: float = 0.174  # spatial frequency (radians per cell)
+    amplitude: int = 12  # mound height in cells
 
 
 InitConfig = Union[
@@ -102,7 +102,7 @@ class SimulationConfig(BaseModel):
     # Early termination (plateau detection) parameters
     early_termination_window: int = 5  # number of saved data points to consider for plateau
     early_termination_tolerance: float = 0.03  # relative change threshold (e.g., 0.03 = 3%)
-    cuda_device_index: int = 1
+    cuda_device_index: int = 0
 
     # Reproducibility (optional)
     rng_seed: Optional[int] = None
@@ -156,21 +156,21 @@ class SimulationConfig(BaseModel):
         _ = str(self.output_dir)
         # Per-mode constraints
         if isinstance(self.init, SingleInitConfig):
-            if self.init.seed_edge_length < 1:
-                raise ValueError("seed_edge_length must be >= 1")
+            if self.init.seed_edge_length < 2:
+                raise ValueError("seed_edge_length must be >= 2")
         elif isinstance(self.init, MultipleInitConfig):
-            if self.init.seed_edge_length < 1:
-                raise ValueError("seed_edge_length must be >= 1")
+            if self.init.seed_edge_length < 2:
+                raise ValueError("seed_edge_length must be >= 2")
             if self.init.num_seeds < 1:
                 raise ValueError("num_seeds must be >= 1")
         elif isinstance(self.init, FlatBottomInitConfig):
-            if self.init.num_flat_layers < 0:
-                raise ValueError("num_flat_layers must be >= 0")
+            if self.init.num_flat_layers < 1:
+                raise ValueError("num_flat_layers must be >= 1")
         elif isinstance(self.init, PythonCodeInitConfig):
             pass
         elif isinstance(self.init, PairInitConfig):
-            if self.init.seed1_edge_length < 1 or self.init.seed2_edge_length < 1:
-                raise ValueError("seed1_edge_length and seed2_edge_length must be >= 1 for pair mode")
+            if self.init.seed1_edge_length < 2 or self.init.seed2_edge_length < 2:
+                raise ValueError("seed1_edge_length and seed2_edge_length must be >= 2 for pair mode")
             if self.init.center_separation < 0:
                 raise ValueError("center_separation must be >= 0")
         elif isinstance(self.init, SteppedBottomInitConfig):
