@@ -66,7 +66,7 @@ def write_json(path: Path, data: Any) -> None:
 # Example usage:
 
 
-def generate_log_points(start=1, end=2000000, N=100, skew=1.0):
+def generate_log_points(start=1, end=2000000, N=100, skew=3.0):
     """
     Generate N timesteps spaced geometrically between start and end.
 
@@ -82,11 +82,15 @@ def generate_log_points(start=1, end=2000000, N=100, skew=1.0):
     Returns:
         np.ndarray: int32 array of length N with monotonically increasing points.
 
+    Notes:
+        Standard "log spacing" is geometric and does not depend on the choice of
+        logarithm base. The optional `skew` allows emphasizing density toward one
+        end while remaining geometrically increasing overall.
     """
     start = float(max(1, start))
     end = float(max(start, end))
     N = int(max(1, N))
-    skew = 3
+    skew = float(max(1e-6, skew))
 
     if N == 1 or start == end:
         return np.int32([int(round(start))])
