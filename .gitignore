@@ -1,0 +1,36 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+.env/
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE/project
+.vscode/
+.idea/
+*.iml
+
+# Build & packaging
+build/
+dist/
+*.egg-info/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs & temp
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Project outputs
+output/
