@@ -91,6 +91,92 @@ Requirements: `PySide6`, `pyqtgraph`, and standard scientific stack (see require
 
 ---
 
+## Examples (loadable from `examples/`)
+
+You can quickly try several pre-configured scenarios by loading the JSON recipes from the `examples/` folder.
+
+- In the GUI: click "Config file → Load" and pick any file under `examples/`.
+- Headless: run `python CA3D.py --config examples/<Recipe Name>.json`.
+
+Brief overview and measured runtimes (on an RTX 3090, 128×128×128 lattice):
+
+- Dendrite growth (`examples/Dendrite growth.json`)
+  - Description: single-seed dendritic growth in a periodic box.
+  - Output folder: `output/dendrite`
+  - Runtime (log): Total time - a couple of minutes.
+  - Output Size: ~450 MB
+
+- Well-shaped crystal (`examples/Well-shaped crystal.json`)
+  - Description: long run forming a faceted crystal (slow growth probabilities).
+  - Output folder: `output/wellshaped`
+  - Runtime (log): Total time ~20-25 minutes
+  - Output Size: ~3 GB
+
+- Unstable crystal growth (`examples/Unstable crystal.json`)
+  - Description: a growth of a unstable shape between the well-shaped and dendritic.
+  - Output folder: `output/wellshaped`
+  - Runtime (log): Total time 00:22:08 for 99800 steps; mean 75.15 it/s
+  - Size: medium to large (can reach hundreds of MB with dense snapshots)
+
+- Crystal dissolution (`examples/Crystal_dissolution.json`)
+  - Description: large single crystal dissolving (growth off, sublimation on).
+  - Output folder: `output/crystal_dissolution`
+  - Runtime (log): Total time ~ 2-5 minutes
+  - Output Size: ~800 MB
+
+- Nucleation (`examples/Nucleation.json`)
+  - Description: 3D nucleation enabled in bulk; many small clusters.
+  - Output folder: `output/nucleation`
+  - Runtime (log): Total time ~ 5-10 minutes~
+  - Output Size: ~1.45 GB
+
+- Particle coagulation (`examples/Particle_coagulation.json`)
+  - Description: two seeds coalesce; useful for neck formation/coarsening.
+  - Output folder: `output/particle_coagulation`
+  - Runtime (log): Total time ~10-15 minutes
+  - Output Size: ~2.8 GB
+
+- Particle ripening (`examples/Particle_ripening.json`)
+  - Description: two-particle ripening with diffusion-driven mass transfer.
+  - Output folder: `output/particle_ripening`
+  - Runtime (log): Total time ~10 minutes
+  - Output Size: ~1.1 GB
+
+- Full lifecycle (nucleation → growth → ripening) — long (`examples/Full_lifecycle (nucleation_growth_ripening)_long.json`)
+  - Description: extended run across regimes using log-distributed snapshots.
+  - Output folder: `output/full_lifecycle`
+  - Runtime: varies (long run, make take a few hours)
+  - Output Size: ~2.8 GB
+
+- Dendrite vicinal growth (`examples/Dendrite vicinal growth.json`)
+  - Description: dendritic growth over a stepped (vicinal) surface.
+  - Output folder: `output/dendrite vicinal growth`
+  - Runtime (log): Total time ~ 5-10 minutes
+  - Output Size: ~2.8 GB
+
+- Step-flow vicinal growth (`examples/Step-flow vicinal growth.json`)
+  - Description: slow step-flow regime over many iterations.
+  - Output folder: `output/step-flow growth`
+  - Runtime (log): Total time ~ 15-20 minutes
+  - Output Size: ~ 3.5 GB
+
+- Surface growth via 2D nucleation (`examples/Surface growth via 2D nucleation.json`)
+  - Description: flat surface with rare 2D nucleation and layer-by-layer growth.
+  - Output folder: `output/surface growth via 2D nucleation`
+  - Runtime (log): Total time ~ 10-15 minutes
+  - Output Size: ~3.2 GB
+
+- Surface smoothing (`examples/Surface_smoothing.json`)
+  - Description: smoothing of mounded/rough surface under growth conditions.
+  - Output folder: `output/surface_smoothing`
+  - Runtime (log): Total time ~10-15 minutes
+  - Output Size: ~2.7 GB
+
+Notes on space/time:
+- Disk usage depends strongly on `xyz_snapshot_interval_steps` and total steps; expect from a few MB up to tens of GB for longer runs with dense snapshots.
+- The reported runtimes are from the NVIDIA RTX 3090; your hardware and settings may differ.
+
+
 ## Running simulations in different regimes
 
 The initial crystalline lattice configuration is controlled by `init.mode` in `config.json` (see full reference below). Set the `output_dir` to an existing or new directory to collect outputs.
@@ -198,105 +284,6 @@ Set `num_iterations` and `snapshot_interval_steps` to control runtime and snapsh
 For a starting point, copy `config.example.json` to `config.json` and tweak as needed.
 
 ---
-
-## Examples (loadable from `examples/`)
-
-You can quickly try several pre-configured scenarios by loading the JSON recipes from the `examples/` folder.
-
-- In the GUI: click "Config file → Load" and pick any file under `examples/`.
-- Headless: run `python CA3D.py --config examples/<Recipe Name>.json`.
-
-Brief overview and measured runtimes (on an RTX 3090, 128×128×128 lattice):
-
-- Dendrite growth (`examples/Dendrite growth.json`)
-  - Description: single-seed dendritic growth in a periodic box.
-  - Output folder: `output/dendrite`
-  - Runtime (log): Total time - a couple of minutes.
-  - Output Size: ~450 MB
-
-- Well-shaped crystal (`examples/Well-shaped crystal.json`)
-  - Description: long run forming a faceted crystal (slow growth probabilities).
-  - Output folder: `output/wellshaped`
-  - Runtime (log): Total time ~20-25 minutes
-  - Output Size: ~3 GB
-
-- Unstable crystal growth (`examples/Unstable crystal.json`)
-  - Description: a growth of a unstable shape between the well-shaped and dendritic.
-  - Output folder: `output/wellshaped`
-  - Runtime (log): Total time 00:22:08 for 99800 steps; mean 75.15 it/s
-  - Size: medium to large (can reach hundreds of MB with dense snapshots)
-
-- Crystal dissolution (`examples/Crystal_dissolution.json`)
-  - Description: large single crystal dissolving (growth off, sublimation on).
-  - Output folder: `output/crystal_dissolution`
-  - Runtime (log): Total time ~ 2-5 minutes
-  - Output Size: ~800 MB
-
-- Nucleation (`examples/Nucleation.json`)
-  - Description: 3D nucleation enabled in bulk; many small clusters.
-  - Output folder: `output/nucleation`
-  - Runtime (log): Total time ~ 5-10 minutes~
-  - Output Size: ~1.45 GB
-
-- Particle coagulation (`examples/Particle_coagulation.json`)
-  - Description: two seeds coalesce; useful for neck formation/coarsening.
-  - Output folder: `output/particle_coagulation`
-  - Runtime (log): Total time ~10-15 minutes
-  - Output Size: ~2.8 GB
-
-- Particle ripening (`examples/Particle_ripening.json`)
-  - Description: two-particle ripening with diffusion-driven mass transfer.
-  - Output folder: `output/particle_ripening`
-  - Runtime (log): Total time ~10 minutes
-  - Output Size: ~1.1 GB
-
-- Full lifecycle (nucleation → growth → ripening) — long (`examples/Full_lifecycle (nucleation_growth_ripening)_long.json`)
-  - Description: extended run across regimes using log-distributed snapshots.
-  - Output folder: `output/full_lifecycle`
-  - Runtime: varies (long run, make take a few hours)
-  - Output Size: ~2.8 GB
-
-- Dendrite vicinal growth (`examples/Dendrite vicinal growth.json`)
-  - Description: dendritic growth over a stepped (vicinal) surface.
-  - Output folder: `output/dendrite vicinal growth`
-  - Runtime (log): Total time ~ 5-10 minutes
-  - Output Size: ~2.8 GB
-
-- Step-flow vicinal growth (`examples/Step-flow vicinal growth.json`)
-  - Description: slow step-flow regime over many iterations.
-  - Output folder: `output/step-flow growth`
-  - Runtime (log): Total time ~ 15-20 minutes
-  - Output Size: ~ 3.5 GB
-
-- Surface growth via 2D nucleation (`examples/Surface growth via 2D nucleation.json`)
-  - Description: flat surface with rare 2D nucleation and layer-by-layer growth.
-  - Output folder: `output/surface growth via 2D nucleation`
-  - Runtime (log): Total time ~ 10-15 minutes
-  - Output Size: ~3.2 GB
-
-- Surface smoothing (`examples/Surface_smoothing.json`)
-  - Description: smoothing of mounded/rough surface under growth conditions.
-  - Output folder: `output/surface_smoothing`
-  - Runtime (log): Total time ~10-15 minutes
-  - Output Size: ~2.7 GB
-
-Notes on space/time:
-- Disk usage depends strongly on `xyz_snapshot_interval_steps` and total steps; expect from a few MB up to tens of GB for longer runs with dense snapshots.
-- The reported runtimes are from the NVIDIA RTX 3090; your hardware and settings may differ.
-
-**Age Calculation Examples:**
-- To enable age tracking for crystalline cells and incorporation sites, set `"enable_age_calculation": true` in your config
-- This adds extra columns to XYZ files and generates additional statistics files
-- Example with age tracking enabled:
-  ```json
-  {
-    "enable_age_calculation": true,
-    "init": { "mode": "single", "seed_edge_length": 4 },
-    "recipe_values": { "Pk": 1.0, "Ps": 0.5, "Pn": 0.1, "Pke": 0.0, "Pse": 0.0, "Pne": 0.0 }
-  }
-  ```
-
-
 
 ---
 
