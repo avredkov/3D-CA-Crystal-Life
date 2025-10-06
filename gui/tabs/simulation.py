@@ -133,7 +133,6 @@ class SimulationTab(QtWidgets.QWidget):
         # Output / compute widgets
         self.output_dir = QtWidgets.QLineEdit()
         btn_browse_out = QtWidgets.QPushButton("Browse…")
-        self.cuda_index = QtWidgets.QSpinBox(); self.cuda_index.setRange(0, 16)
         # Early termination controls
         self.en_early_stop = QtWidgets.QCheckBox("Early stop (plateau detection)")
         self.en_early_stop.setToolTip("Stop early when growth/dissolution plateaus (config: enable_early_termination)")
@@ -233,7 +232,7 @@ class SimulationTab(QtWidgets.QWidget):
             self._rules_tab_index = -1
         # Tab 4: Monitoring and output
         tab_out = QtWidgets.QWidget(); tab_out_l = QtWidgets.QVBoxLayout(tab_out)
-        out_box = QtWidgets.QGroupBox("Monitoring and output"); out_box.setToolTip("Output directory, snapshot intervals, diagnostics, CUDA device (config: output_dir, data_snapshot_interval_steps, xyz_snapshot_interval_steps, xyz_save_last_only, cuda_device_index)")
+        out_box = QtWidgets.QGroupBox("Monitoring and output"); out_box.setToolTip("Output directory, snapshot intervals, diagnostics (config: output_dir, data_snapshot_interval_steps, xyz_snapshot_interval_steps, xyz_save_last_only)")
         out_l = QtWidgets.QGridLayout(out_box)
         try:
             out_l.setHorizontalSpacing(8)
@@ -293,16 +292,11 @@ class SimulationTab(QtWidgets.QWidget):
         grid_stats.addWidget(self.en_age, 1, 1)
         stats_widget = QtWidgets.QWidget(); stats_widget.setLayout(grid_stats)
         out_l.addWidget(stats_widget, 6, 0, 1, 4)
-        # CUDA and early stop on next row
-        lbl_cuda = QtWidgets.QLabel("CUDA device index"); lbl_cuda.setToolTip("GPU device index to use (config: cuda_device_index)")
-        self.cuda_index.setToolTip("config: cuda_device_index")
-        # Place Early stop just below the Record... checkboxes row
+        # Early stop controls row
         out_l.addWidget(self.en_early_stop, 7, 0, 1, 2)
         # Early-stop parameters row (hidden unless checkbox is checked)
         out_l.addWidget(self.early_win_lbl, 8, 0); out_l.addWidget(self.early_win, 8, 1)
         out_l.addWidget(self.early_tol_lbl, 9, 0); out_l.addWidget(self.early_tol, 9, 1)
-        # Move CUDA row below early-stop controls
-        out_l.addWidget(lbl_cuda, 10, 0); out_l.addWidget(self.cuda_index, 10, 1)
 
         # Toggle UI sections based on snapshot mode
         def _toggle_snapshot_mode(mode: str) -> None:
@@ -496,8 +490,7 @@ class SimulationTab(QtWidgets.QWidget):
         self.wall_y_max.setChecked(bool(cfg.walls.wall_y_max))
         self.wall_z_min.setChecked(bool(cfg.walls.wall_z_min))
         self.wall_z_max.setChecked(bool(cfg.walls.wall_z_max))
-        # compute & output
-        self.cuda_index.setValue(int(cfg.cuda_device_index))
+        # compute & output (CUDA device fixed to 0; no UI selector)
         self.en_early_stop.setChecked(bool(cfg.enable_early_termination))
         try:
             self.early_win.setValue(int(getattr(cfg, "early_termination_window", 100)))
@@ -527,7 +520,7 @@ class SimulationTab(QtWidgets.QWidget):
             "log_snapshot_count": int(self.log_count.value()),
             "initial_occupancy_fraction": float(self.initial_occ.value()),
             "ruleset_name": self.ruleset_name.currentText() or "Default",
-            "cuda_device_index": int(self.cuda_index.value()),
+            "cuda_device_index": 0,
             "enable_early_termination": bool(self.en_early_stop.isChecked()),
             "early_termination_window": int(self.early_win.value()),
             "early_termination_tolerance": float(self.early_tol.value()),
