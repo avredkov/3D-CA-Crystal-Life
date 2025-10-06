@@ -1,6 +1,6 @@
 ## 3D Cellular Automaton (CA) + Monte Carlo Crystal Growth Simulator <i> "Crystal Life" </i>
 
-A GPU-accelerated 3D cellular automaton for crystal growth simulation described in the paper by the paper <b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i></b>.
+A GPU-accelerated 3D cellular automaton for crystal growth simulation described in the paper <b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i></b>.
 The simulation evolves a lattice of atoms with CUDA kernels while exporting time-series snapshots and quantitative description of crystal growth and dissoultion processes for analysis. All behavior is configured via `config.json` and modular “rulesets” in `rules/`.
 
 ### Quick start
