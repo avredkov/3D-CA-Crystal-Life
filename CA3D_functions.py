@@ -66,20 +66,42 @@ def write_json(path: Path, data: Any) -> None:
 # Example usage:
 
 
-def generate_log_points(start=1, end=2000000, N=100):
+def generate_log_points(start=1, end=2000000, N=100, skew=1.0):
     """
-    Generates N points on a logarithmic scale from start to end.
+    Generate N timesteps spaced geometrically between start and end.
 
-    Parameters:
-    - start: The starting value of the range (inclusive).
-    - end: The ending value of the range (inclusive).
-    - N: The number of points to generate.
+    Args:
+        start (int | float): Inclusive start (> 0).
+        end (int | float): Inclusive end (> start).
+        N (int): Number of points to generate (>= 1).
+        skew (float): Monotonic skew of density across the range. 1.0 produces
+            standard geometric spacing (independent of log base). Values > 1
+            bias density toward the end (fewer points near start, more near end).
+            Values in (0, 1) bias density toward the start. Must be > 0.
 
     Returns:
-    - A numpy array of logarithmically spaced points.
+        np.ndarray: int32 array of length N with monotonically increasing points.
+
     """
-    log_space = np.logspace(np.log10(start), np.log10(end), num=N)
-    return np.int32(log_space)
+    start = float(max(1, start))
+    end = float(max(start, end))
+    N = int(max(1, N))
+    skew = 3
+
+    if N == 1 or start == end:
+        return np.int32([int(round(start))])
+
+    # Map uniform parameter t in [0, 1] through a power curve to skew density,
+    # then exponentiate over the natural log interval. This yields geometric
+    # spacing when skew == 1 and biases toward `end` when skew > 1.
+    t = np.linspace(0.0, 1.0, N)
+    t_skewed = t ** skew
+    log_start = np.log(start)
+    log_end = np.log(end)
+    exponents = log_start + (log_end - log_start) * t_skewed
+    values = np.exp(exponents)
+
+    return np.int32(values)
 
 
 

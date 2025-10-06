@@ -1,0 +1,45 @@
+{
+  "parameters": {
+    "lattice_size_x": 128,
+    "lattice_size_y": 128,
+    "lattice_size_z": 128,
+    "num_iterations": 50000,
+    "data_snapshot_interval_steps": 100,
+    "xyz_snapshot_interval_steps": 100,
+    "xyz_save_last_only": false,
+    "snapshot_schedule_mode": "linear",
+    "log_snapshot_count": 100,
+    "initial_occupancy_fraction": 0.1,
+    "output_dir": "./output/unstable_crystal",
+    "enable_early_termination": false,
+    "early_termination_window": 5,
+    "early_termination_tolerance": 0.03,
+    "cuda_device_index": 0,
+    "rng_seed": 2,
+    "enable_event_statistics": true,
+    "enable_surface_state_statistics": true,
+    "enable_coordination_statistics": true,
+    "enable_age_calculation": true,
+    "walls": {
+      "wall_x_min": true,
+      "wall_x_max": true,
+      "wall_y_min": true,
+      "wall_y_max": true,
+      "wall_z_min": true,
+      "wall_z_max": true
+    }
+  },
+  "ruleset": "Default",
+  "recipe_values": {
+    "Pk": 1.0,
+    "Ps": 1.0,
+    "Pn": 0.005,
+    "Pke": 0.0,
+    "Pse": 0.0,
+    "Pne": 0.0
+  },
+  "init": {
+    "mode": "single",
+    "seed_edge_length": 4
+  }
+}
