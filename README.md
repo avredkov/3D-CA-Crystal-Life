@@ -306,9 +306,7 @@ Schema is defined in `config.py` with Pydantic. All keys have safe defaults unle
   - `initial_occupancy_fraction` (float): Initial probability of a site being occupied (by mobile atom, state=1) before seeding crystalline atoms (state=2).
 - I/O
   - `output_dir` (string, required): Output directory. Will be created if missing.
-- GPU/device
-  - `cuda_device_index` (int): CUDA device index (0-based). Clamped to available devices.
-\- Early stop
+- Early stop
   - `enable_early_termination` (bool): If true, stop early when population dynamics plateau.
   - `early_termination_window` (int): Number of last saved data points (on `data_snapshot_interval_steps` cadence) to consider for plateau detection (default 5).
   - `early_termination_tolerance` (float): Relative-change threshold in [0,1] across the window for both mobile and crystalline counts (default 0.03 = 3%). If both remain within tolerance across the last `early_termination_window` saved points, the simulation stops early.
