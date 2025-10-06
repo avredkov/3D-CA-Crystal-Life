@@ -653,7 +653,7 @@ Set to `false` to keep periodic wrapping in that direction.
 
 ## Citation / Contact
 
-Please refer to the paper<b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i><b> (<i>in press</i>).
+Please refer to the paper <b>A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev. <i>"Under the Kink's rule: The Way of the Crystal"</i></b> (<i>in press</i>).
 
 For issues, please contact the authors.
 
