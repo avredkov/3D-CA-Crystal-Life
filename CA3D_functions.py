@@ -66,7 +66,7 @@ def write_json(path: Path, data: Any) -> None:
 # Example usage:
 
 
-def generate_log_points(start=1, end=2000000, N=100, skew=3.0):
+def generate_log_points(start=1, end=2000000, N=100, skew=0.5):
     """
     Generate N timesteps spaced geometrically between start and end.
 
