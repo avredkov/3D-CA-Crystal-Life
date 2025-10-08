@@ -39,73 +39,34 @@ from save_helpers import (
     save_crystalline_age_means,
     save_site_age_means,
 )
+from utils.logging_utils import append_log, append_boxed_log
+from utils.data_utils import convert, format_duration, format_bytes, write_json
+from utils.bounds_utils import centered_bounds, simple_bounds
+from utils.validation_utils import validate_system_requirements
+from utils.math_utils import generate_log_points
+from utils.config_utils import serialize_config_metadata
 
 
-def convert(o):
-    if isinstance(o, np.integer):
-        return int(o)
-    if isinstance(o, np.floating):
-        return float(o)
-    if isinstance(o, (np.ndarray, np.generic)):
-        return o.tolist()
-    return o
 
 
-def write_json(path: Path, data: Any) -> None:
+def validate_and_prepare_simulation(cfg, log_path: Path) -> None:
     """
-    Write JSON data to a file using UTF-8 encoding.
-
+    Validate system requirements and prepare for simulation.
+    
     Args:
-        path (Path): Destination file path.
-        data (Any): Serializable content.
+        cfg: Configuration object.
+        log_path (Path): Path to the log file.
+        
+    Raises:
+        SystemExit: If validation fails.
     """
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(data, handle, default=convert, ensure_ascii=False, indent=2)
+    # Ensure output directory exists
+    Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
+    
+    # Perform all validations
+    validate_system_requirements(cfg, log_path)
 
 
-# Example usage:
-
-
-def generate_log_points(start=1, end=2000000, N=100, skew=0.5):
-    """
-    Generate N timesteps spaced geometrically between start and end.
-
-    Args:
-        start (int | float): Inclusive start (> 0).
-        end (int | float): Inclusive end (> start).
-        N (int): Number of points to generate (>= 1).
-        skew (float): Monotonic skew of density across the range. 1.0 produces
-            standard geometric spacing (independent of log base). Values > 1
-            bias density toward the end (fewer points near start, more near end).
-            Values in (0, 1) bias density toward the start. Must be > 0.
-
-    Returns:
-        np.ndarray: int32 array of length N with monotonically increasing points.
-
-    Notes:
-        Standard "log spacing" is geometric and does not depend on the choice of
-        logarithm base. The optional `skew` allows emphasizing density toward one
-        end while remaining geometrically increasing overall.
-    """
-    start = float(max(1, start))
-    end = float(max(start, end))
-    N = int(max(1, N))
-    skew = float(max(1e-6, skew))
-
-    if N == 1 or start == end:
-        return np.int32([int(round(start))])
-
-    # Map uniform parameter t in [0, 1] through a power curve to skew density,
-    # then exponentiate over the natural log interval. This yields geometric
-    # spacing when skew == 1 and biases toward `end` when skew > 1.
-    t = np.linspace(0.0, 1.0, N)
-    t_skewed = t ** skew
-    log_start = np.log(start)
-    log_end = np.log(end)
-    exponents = log_start + (log_end - log_start) * t_skewed
-    values = np.exp(exponents)
-
-    return np.int32(values)
 
 
 
@@ -124,18 +85,6 @@ def prepare_initial_atoms(cfg):
         s = min(s, sizeX, sizeY, sizeZ)
         cx, cy, cz = sizeX//2, sizeY//2, sizeZ//2
 
-        def centered_bounds(center: int, size: int, dim: int):
-            left = size // 2
-            right = size - left  # ensures length == size, handles even sizes
-            start = center - left
-            end = center + right
-            if start < 0:
-                start = 0
-                end = size
-            if end > dim:
-                end = dim
-                start = dim - size
-            return start, end
 
         x0, x1 = centered_bounds(cx, s, sizeX)
         y0, y1 = centered_bounds(cy, s, sizeY)
@@ -185,27 +134,15 @@ def prepare_initial_atoms(cfg):
         c1y = max(0, min(sizeY-1, cy - half))
         c2y = max(0, min(sizeY-1, cy + (dist - half)))
 
-        def bounds(center, size, dim):
-            left = size // 2
-            right = size - left
-            start = max(0, center - left)
-            end = min(dim, center + right)
-            # Adjust if clipped
-            if end - start < size:
-                if start == 0:
-                    end = min(dim, size)
-                else:
-                    start = max(0, end - size)
-            return start, end
 
-        x0,x1 = bounds(cx, s1, sizeX)
-        y0,y1 = bounds(c1y, s1, sizeY)
-        z0,z1 = bounds(cz, s1, sizeZ)
+        x0,x1 = simple_bounds(cx, s1, sizeX)
+        y0,y1 = simple_bounds(c1y, s1, sizeY)
+        z0,z1 = simple_bounds(cz, s1, sizeZ)
         atoms[x0:x1, y0:y1, z0:z1] = 2
 
-        x0,x1 = bounds(cx, s2, sizeX)
-        y0,y1 = bounds(c2y, s2, sizeY)
-        z0,z1 = bounds(cz, s2, sizeZ)
+        x0,x1 = simple_bounds(cx, s2, sizeX)
+        y0,y1 = simple_bounds(c2y, s2, sizeY)
+        z0,z1 = simple_bounds(cz, s2, sizeZ)
         atoms[x0:x1, y0:y1, z0:z1] = 2
     elif mode == 'mounds':
         # Fill below height field h(x,y) = amplitude * (1 + sin(w * x * y))
@@ -488,14 +425,12 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
                         rel_mobile = abs(mN - m0) / max(1.0, float(max(m0, mN)))
                         rel_cryst = abs(cN - c0) / max(1.0, float(max(c0, cN)))
                         if (rel_mobile <= plateau_tol) and (rel_cryst <= plateau_tol):
-                            append_log(
-                                f"Autobreak triggered (plateau snapshots={mobile_hist_snap.maxlen}, tol={plateau_tol:.4f}, dM={rel_mobile:.4f}, dC={rel_cryst:.4f})"
-                            )
+                            append_log(log_path, f"Autobreak triggered (plateau snapshots={mobile_hist_snap.maxlen}, tol={plateau_tol:.4f}, dM={rel_mobile:.4f}, dC={rel_cryst:.4f})", banner)
                             early_stop_triggered = True
                 except Exception:
                     pass
 
-            append_log(f"Snapshot {timestep} saved")
+            append_log(log_path, f"Snapshot {timestep} saved", banner)
 
             # Reason: Free host memory promptly after snapshot serialization.
             del atoms
@@ -667,7 +602,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     path=params[4]
     snapshot_base = Path(path)
     snapshot_base.mkdir(parents=True, exist_ok=True)
-    device=params[5]
+    device=1 #params[5]
     probabilities=params[6]
     autobreak=params[7]
     calculate_event_statistics = bool(params[8])
@@ -711,7 +646,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
                 "*   |____/|____/       \____/_/   \_\  \____|_|   \__, |___/\__\__,_|_|   *",
                 "*                                                 |___/                   *",
                 "*                        version 1.0.0, 2025                              *",
-                "*           A.V. Redkov, V. Ivanov, A. Pimpinelli, V. Tonchev             *",
+                "*                             by A.V. Redkov                              *",
                 "*                report the bugs to : avredkov@gmail.com                  *",
                 "***************************************************************************",
             ]
@@ -722,51 +657,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     used_params_path = snapshot_base / "used_params.json"
     content_width = len(banner.splitlines()[0]) - 4
 
-    def append_log(message: str) -> None:
-        timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-        try:
-            log_exists = log_path.exists()
-            with open(log_path, "a", encoding="utf-8") as log_file:
-                if not log_exists:
-                    log_file.write(banner + "\n")
-                log_file.write(f"[{timestamp}] {message}\n")
-        except OSError:
-            pass
 
-    def format_box(lines: list[str]) -> str:
-        boxed = []
-        spacer = f"* {' ' * content_width} *"
-        boxed.append(spacer)
-        for line in lines:
-            if not line.strip():
-                boxed.append(spacer)
-                continue
-            wrapped = textwrap.wrap(
-                line,
-                width=content_width,
-                break_long_words=False,
-                break_on_hyphens=False,
-            ) or [" "]
-            for segment in wrapped:
-                boxed.append(f"* {segment.ljust(content_width)} *")
-        boxed.append(spacer)
-        return "\n".join(boxed)
-
-    def append_boxed(title: str, payload: Any) -> None:
-        try:
-            serialized = json.dumps(payload, indent=2, default=convert)
-            data_lines = serialized.splitlines()
-            section_lines = [f"{title}"] + data_lines
-            log_exists = log_path.exists()
-            with open(log_path, "a", encoding="utf-8") as log_file:
-                if not log_exists:
-                    log_file.write(banner + "\n")
-                timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-                log_file.write(f"[{timestamp}] {title}\n")
-                boxed = format_box(section_lines)
-                log_file.write(boxed + "\n")
-        except OSError:
-            pass
 
     gpu_name: Optional[str]
     try:
@@ -785,52 +676,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         "gpu": gpu_name,
     }
 
-    append_boxed("System Configuration", system_info)
-
-    def serialize_config_metadata(config_metadata: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Normalize configuration metadata for persistence.
-
-        Args:
-            config_metadata (Optional[Dict[str, Any]]): Raw metadata passed from caller.
-
-        Returns:
-            Dict[str, Any]: Serializable metadata with initialization details expanded.
-        """
-        if not config_metadata:
-            return {}
-
-        params = dict(config_metadata.get("parameters", {}))
-        init_from_params = params.pop("init", None)
-        params.pop("rule_probabilities", None)
-        params.pop("probabilities", None)
-        params.pop("recipe_values", None)
-        params.pop("ruleset", None)
-        params.pop("ruleset_name", None)
-        init_raw = config_metadata.get("init") or init_from_params
-
-        init_section = None
-        if isinstance(init_raw, dict):
-            init_section = dict(init_raw)
-        elif hasattr(init_raw, "model_dump"):
-            init_section = init_raw.model_dump()
-
-        payload: Dict[str, Any] = {
-            "parameters": params,
-        }
-
-        ruleset = config_metadata.get("ruleset") or config_metadata.get("ruleset_name")
-        if ruleset is not None:
-            payload["ruleset"] = ruleset
-
-        recipe_values = config_metadata.get("recipe_values")
-        if recipe_values is not None:
-            payload["recipe_values"] = recipe_values
-
-        if init_section is not None:
-            payload["init"] = init_section
-
-        return payload
+    append_boxed_log(log_path, "System Configuration", system_info, banner)
 
     params_payload = serialize_config_metadata(config_metadata)
     if not params_payload:
@@ -856,17 +702,17 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
 
     try:
         write_json(used_params_path, params_payload)
-        append_log("Recipe parameters saved to used_params.json")
-        append_boxed("Simulation Parameters", params_payload)
+        append_log(log_path, "Recipe parameters saved to used_params.json", banner)
+        append_boxed_log(log_path, "Simulation Parameters", params_payload, banner)
     except OSError:
-        append_log("Failed to write used_params.json")
+        append_log(log_path, "Failed to write used_params.json", banner)
 
     # Load and apply selected ruleset
     assign_rules = load_assign_rules(ruleset)
     param_map = dict(config_metadata.get("recipe_values") or {})
     # Evaluate rules with params into Ru
     assign_rules(Ru, param_map)
-    append_log(f"Ruleset '{ruleset}' loaded with parameters {param_map}")
+    append_log(log_path, f"Ruleset '{ruleset}' loaded with parameters {param_map}", banner)
     # Persist fully-evaluated rules to JSON for reproducibility
     try:
         rules_used_path = snapshot_base / "rules_used.json"
@@ -875,9 +721,9 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
             "parameters": param_map,
             "Ru": [float(x) for x in Ru.tolist()],
         })
-        append_log("rules_used.json written")
+        append_log(log_path, "rules_used.json written", banner)
     except OSError:
-        append_log("Failed to write rules_used.json")
+        append_log(log_path, "Failed to write rules_used.json", banner)
 
  
     conway_ker = ker.get_function("conway_ker")
@@ -905,7 +751,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     else:
         atoms = np.int32((np.random.random(sizeX * sizeY * sizeZ) < coverage).reshape(sizeX, sizeY, sizeZ))
 
-    append_log("Initial atoms array prepared")
+    append_log(log_path, "Initial atoms array prepared", banner)
 
     coordinations_count=np.int32(np.zeros((7)))
     states_count=np.int32(np.zeros((3)))
@@ -925,7 +771,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     atoms_gpu = gpuarray.to_gpu(atoms)
     atoms_next_gpu = gpuarray.empty_like(atoms_gpu)
     del(atoms)
-    append_log("CA experiment started")
+    append_log(log_path, "CA experiment started", banner)
     try:
         atoms_evolution,coordinations_evolution=calculateCA_evolution(
             atoms_gpu,
@@ -957,11 +803,11 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
             "type": exc.__class__.__name__,
             "message": str(exc),
         }
-        append_boxed("Error", error_details)
-        append_log("CA experiment aborted due to error")
+        append_boxed_log(log_path, "Error", error_details, banner)
+        append_log(log_path, "CA experiment aborted due to error", banner)
         raise
     else:
-        append_log("CA experiment completed successfully")
+        append_log(log_path, "CA experiment completed successfully", banner)
         return atoms_evolution,params,coordinations_evolution
     finally:
         try:
@@ -969,5 +815,5 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
                 ctx.pop()
         except Exception:
             pass
-        append_log("CA experiment finished")
+        append_log(log_path, "CA experiment finished", banner)
 
