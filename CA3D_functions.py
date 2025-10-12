@@ -602,7 +602,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     path=params[4]
     snapshot_base = Path(path)
     snapshot_base.mkdir(parents=True, exist_ok=True)
-    device=1 #params[5]
+    device=0 #params[5]
     probabilities=params[6]
     autobreak=params[7]
     calculate_event_statistics = bool(params[8])

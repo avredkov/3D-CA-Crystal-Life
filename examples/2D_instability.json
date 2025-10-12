@@ -1,0 +1,43 @@
+{
+  "lattice_size_x": 4,
+  "lattice_size_y": 512,
+  "lattice_size_z": 512,
+  "num_iterations": 200000,
+  "data_snapshot_interval_steps": 100,
+  "xyz_snapshot_interval_steps": 300,
+  "xyz_save_last_only": false,
+  "snapshot_schedule_mode": "linear",
+  "log_snapshot_count": 800,
+  "initial_occupancy_fraction": 0.15,
+  "output_dir": "./output/pseudo_2D",
+  "enable_early_termination": false,
+  "early_termination_window": 5,
+  "early_termination_tolerance": 0.03,
+  "cuda_device_index": 0,
+  "rng_seed": 4,
+  "recipe_values": {
+    "Pk": 1.0,
+    "Ps": 0.5,
+    "Pn": 0.001,
+    "Pke": 0.0,
+    "Pse": 0.0,
+    "Pne": 0.0
+  },
+  "ruleset_name": "Default",
+  "enable_event_statistics": true,
+  "enable_surface_state_statistics": true,
+  "enable_coordination_statistics": true,
+  "enable_age_calculation": true,
+  "init": {
+    "mode": "single",
+    "seed_edge_length": 4
+  },
+  "walls": {
+    "wall_x_min": true,
+    "wall_x_max": true,
+    "wall_y_min": true,
+    "wall_y_max": true,
+    "wall_z_min": true,
+    "wall_z_max": true
+  }
+}
