@@ -189,6 +189,17 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         snapshot_mode = "linear"
         log_count = 100
         enable_age = 0
+    
+    # Diffusion bias parameters
+    try:
+        cfg_params = (config_metadata or {}).get("parameters", {}) if isinstance(config_metadata, dict) else {}
+        diffusion_bias_x = float(cfg_params.get("diffusion_bias_x", 0.0))
+        diffusion_bias_y = float(cfg_params.get("diffusion_bias_y", 0.0))
+        diffusion_bias_z = float(cfg_params.get("diffusion_bias_z", 0.0))
+    except Exception:
+        diffusion_bias_x = 0.0
+        diffusion_bias_y = 0.0
+        diffusion_bias_z = 0.0
  
                       
     # Walls configuration (non-transparent borders)
@@ -246,6 +257,11 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         z=np.arange(4)
         coords=np.array(list(itertools.product(x,y,z)))
         snapshot_base = Path(path)
+        
+        # Diffusion bias values (captured from outer scope)
+        bias_x = np.float32(diffusion_bias_x)
+        bias_y = np.float32(diffusion_bias_y)
+        bias_z = np.float32(diffusion_bias_z)
 
         # Plateau-based early termination parameters (read from config_metadata if present)
         plateau_window = 5  # number of saved data points to consider
@@ -520,9 +536,9 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
                     np.int32(coords[k][0]),
                     np.int32(coords[k][1]),
                     np.int32(coords[k][2]),
-                    np.float32(0.0),
-                    np.float32(0.0),
-                    np.float32(0.0),
+                    bias_x,
+                    bias_y,
+                    bias_z,
                     wx0, wx1, wy0, wy1, wz0, wz1,
                     grid=(int(sizeX//4),int(sizeY//4),int(sizeZ//4)),
                     block=(1,1,1)

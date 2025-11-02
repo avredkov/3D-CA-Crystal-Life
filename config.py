@@ -93,6 +93,14 @@ class SimulationConfig(BaseModel):
 
     # Surface/physics
     initial_occupancy_fraction: float = 0.05
+    
+    # Diffusion bias parameters (range: -1.0 to 1.0)
+    # 0 = equal probability in both directions
+    # 1 = only positive direction (P=1/3)
+    # -1 = only negative direction (P=1/3)
+    diffusion_bias_x: float = 0.0
+    diffusion_bias_y: float = 0.0
+    diffusion_bias_z: float = 0.0
 
     # Paths
     output_dir: str
@@ -189,6 +197,13 @@ class SimulationConfig(BaseModel):
         if not (0.0 <= float(self.early_termination_tolerance) <= 1.0):
             # Clamp into [0,1] to keep semantics of relative tolerance
             self.early_termination_tolerance = min(1.0, max(0.0, float(self.early_termination_tolerance)))
+        # Clamp diffusion bias parameters to [-1.0, 1.0]
+        if not (-1.0 <= float(self.diffusion_bias_x) <= 1.0):
+            self.diffusion_bias_x = max(-1.0, min(1.0, float(self.diffusion_bias_x)))
+        if not (-1.0 <= float(self.diffusion_bias_y) <= 1.0):
+            self.diffusion_bias_y = max(-1.0, min(1.0, float(self.diffusion_bias_y)))
+        if not (-1.0 <= float(self.diffusion_bias_z) <= 1.0):
+            self.diffusion_bias_z = max(-1.0, min(1.0, float(self.diffusion_bias_z)))
         return self
 
     def to_params(self) -> list:

@@ -89,6 +89,28 @@ Requirements: `PySide6`, `pyqtgraph`, and standard scientific stack (see require
 - At configurable time steps, the simulator persists 3D snapshots and statistics to files in the output `output_dir`.
 - Rules are provided by a ruleset module in `rules/` that fills a probability lookup table `Ru` of size 2187 (3^7 local neighborhood encoding for center + 6 face neighbors).
 
+### Diffusion Bias Parameters
+
+The simulator supports directional bias in mobile atom diffusion through three independent parameters: `diffusion_bias_x`, `diffusion_bias_y`, and `diffusion_bias_z`. These parameters control directional drift along each axis independently.
+
+**Parameter range**: Each bias parameter can range from -1.0 to 1.0.
+
+**Behavior**:
+- **bias = 0.0**: Equal probability of hopping in both positive and negative directions along the axis (default, isotropic diffusion).
+- **bias = 1.0**: Only positive direction is allowed. The probability of hopping in the positive direction is 1/3 (as 2/3 are allocated for hopping along the other two axes).
+- **bias = -1.0**: Only negative direction is allowed. The probability of hopping in the negative direction is 1/3.
+- **Intermediate values**: For values between -1 and 1, probabilities are interpolated proportionally. For example, `bias = 0.5` gives 2/3 probability to the positive direction and 1/3 to the negative direction within the axis's allocation.
+
+**Independence**: Biases along different axes (X, Y, Z) are completely independent. Setting `diffusion_bias_x = 1.0` only affects X-axis diffusion and does not influence Y or Z direction choices.
+
+**Use cases**: Diffusion bias is useful for simulating:
+- Directional fields (electric, magnetic, or chemical gradients)
+- Surface gradients or slopes
+- Anisotropic diffusion environments
+- Controlled directional transport in crystal growth
+
+The bias parameters can be set in `config.json` or adjusted via the GUI's "Initial state" tab under the "Diffusion bias" section.
+
 ---
 
 ## Examples (loadable from `examples/`)

@@ -69,39 +69,66 @@ __global__ void diffuse_adatoms(int * atoms,  float * directions, int cycleX, in
                
              if (atoms[_DIF_INDEX(x,y,z)] == 1)
              {
-               
-                if (directions[_DIF_INDEX(x,y,z)]<0.33333333)
+                float r = directions[_DIF_INDEX(x,y,z)];
+                // Clamp biases to [-1, 1] for safety
+                float bx = (biasX < -1.0f) ? -1.0f : ((biasX > 1.0f) ? 1.0f : biasX);
+                float by = (biasY < -1.0f) ? -1.0f : ((biasY > 1.0f) ? 1.0f : biasY);
+                float bz = (biasZ < -1.0f) ? -1.0f : ((biasZ > 1.0f) ? 1.0f : biasZ);
+                
+                // X axis: probability range [0, 0.333)
+                // P(+x) = (1 + biasX) / 3, P(-x) = (1 - biasX) / 3 within full [0, 1) range
+                // Within X range [0, 0.333), split proportionally: +x gets (1+biasX)/2 fraction
+                if (r < 0.33333333f)
                 {
-                    if (directions[_DIF_INDEX(x,y,z)]<0.16666666)
+                    float fraction_plus = (1.0f + bx) * 0.5f;  // Fraction for +x within X range [0, 0.333)
+                    float threshold_x = fraction_plus * 0.33333333f;  // Threshold within [0, 0.333)
+                    
+                    if (r < threshold_x)
                     {
-                        dx=1;
+                        dx = 1;  // +x direction
                     }
-                    if (directions[_DIF_INDEX(x,y,z)]>=0.16666666)
+                    else
                     {
-                        dx=-1;
+                        dx = -1;  // -x direction
                     }
-                } 
-                if (directions[_DIF_INDEX(x,y,z)]>=0.33333333 && directions[_DIF_INDEX(x,y,z)]<0.66666666)
-                {
-                    if (directions[_DIF_INDEX(x,y,z)]<0.5)
-                    { 
-                        dy=1;
-                    }
-                    if (directions[_DIF_INDEX(x,y,z)]>=0.5)
-                    {
-                         dy=-1;
-                    }     
                 }
-                if (directions[_DIF_INDEX(x,y,z)]>=0.66666666)
+                // Y axis: probability range [0.333, 0.666)
+                // P(+y) = (1 + biasY) / 3, P(-y) = (1 - biasY) / 3 within full [0, 1) range
+                // Within Y range [0.333, 0.666), split proportionally: +y gets (1+biasY)/2 fraction
+                else if (r < 0.66666666f)
                 {
-                    if (directions[_DIF_INDEX(x,y,z)]<0.83333333)
-                    { 
-                        dz=1;
-                    }
-                    if (directions[_DIF_INDEX(x,y,z)]>=0.83333333)
+                    float fraction_plus = (1.0f + by) * 0.5f;  // Fraction for +y within Y range
+                    float y_range_start = 0.33333333f;
+                    float y_range_size = 0.33333333f;
+                    float threshold_y = y_range_start + fraction_plus * y_range_size;
+                    
+                    if (r < threshold_y)
                     {
-                         dz=-1;
-                    }     
+                        dy = 1;  // +y direction
+                    }
+                    else
+                    {
+                        dy = -1;  // -y direction
+                    }
+                }
+                // Z axis: probability range [0.666, 1.0)
+                // P(+z) = (1 + biasZ) / 3, P(-z) = (1 - biasZ) / 3 within full [0, 1) range
+                // Within Z range [0.666, 1.0), split proportionally: +z gets (1+biasZ)/2 fraction
+                else
+                {
+                    float fraction_plus = (1.0f + bz) * 0.5f;  // Fraction for +z within Z range
+                    float z_range_start = 0.66666666f;
+                    float z_range_size = 0.33333333f;
+                    float threshold_z = z_range_start + fraction_plus * z_range_size;
+                    
+                    if (r < threshold_z)
+                    {
+                        dz = 1;  // +z direction
+                    }
+                    else
+                    {
+                        dz = -1;  // -z direction
+                    }
                 }
                 
 

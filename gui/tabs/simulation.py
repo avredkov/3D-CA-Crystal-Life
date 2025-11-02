@@ -117,6 +117,10 @@ class SimulationTab(QtWidgets.QWidget):
         # Pre-create shared widgets used across tabs
         # Physics/probabilities widgets
         self.initial_occ = QtWidgets.QDoubleSpinBox(); self.initial_occ.setRange(0.0, 1.0); self.initial_occ.setSingleStep(0.0001); self.initial_occ.setDecimals(4)
+        # Diffusion bias widgets
+        self.diffusion_bias_x = QtWidgets.QDoubleSpinBox(); self.diffusion_bias_x.setRange(-1.0, 1.0); self.diffusion_bias_x.setSingleStep(0.01); self.diffusion_bias_x.setDecimals(4)
+        self.diffusion_bias_y = QtWidgets.QDoubleSpinBox(); self.diffusion_bias_y.setRange(-1.0, 1.0); self.diffusion_bias_y.setSingleStep(0.01); self.diffusion_bias_y.setDecimals(4)
+        self.diffusion_bias_z = QtWidgets.QDoubleSpinBox(); self.diffusion_bias_z.setRange(-1.0, 1.0); self.diffusion_bias_z.setSingleStep(0.01); self.diffusion_bias_z.setDecimals(4)
         
         # Walls and diagnostics widgets
         self.wall_x_min = QtWidgets.QCheckBox("wall_x_min")
@@ -163,6 +167,19 @@ class SimulationTab(QtWidgets.QWidget):
         self.initial_occ.setToolTip("config: initial_occupancy_fraction")
         occ_l.addWidget(lbl_occ, 0, 0); occ_l.addWidget(self.initial_occ, 0, 1)
         tab_init_l.addWidget(occ_box)
+        # Diffusion bias
+        bias_box = QtWidgets.QGroupBox("Diffusion bias"); bias_box.setToolTip("Directional bias for mobile atom diffusion (config: diffusion_bias_*)")
+        bias_l = QtWidgets.QGridLayout(bias_box)
+        lbl_bias_x = QtWidgets.QLabel("Bias X"); lbl_bias_x.setToolTip("Directional bias for diffusion along X axis. 0=equal, 1=only +X (P=1/3), -1=only -X (P=1/3). config: diffusion_bias_x")
+        lbl_bias_y = QtWidgets.QLabel("Bias Y"); lbl_bias_y.setToolTip("Directional bias for diffusion along Y axis. 0=equal, 1=only +Y (P=1/3), -1=only -Y (P=1/3). config: diffusion_bias_y")
+        lbl_bias_z = QtWidgets.QLabel("Bias Z"); lbl_bias_z.setToolTip("Directional bias for diffusion along Z axis. 0=equal, 1=only +Z (P=1/3), -1=only -Z (P=1/3). config: diffusion_bias_z")
+        self.diffusion_bias_x.setToolTip("config: diffusion_bias_x")
+        self.diffusion_bias_y.setToolTip("config: diffusion_bias_y")
+        self.diffusion_bias_z.setToolTip("config: diffusion_bias_z")
+        bias_l.addWidget(lbl_bias_x, 0, 0); bias_l.addWidget(self.diffusion_bias_x, 0, 1)
+        bias_l.addWidget(lbl_bias_y, 1, 0); bias_l.addWidget(self.diffusion_bias_y, 1, 1)
+        bias_l.addWidget(lbl_bias_z, 2, 0); bias_l.addWidget(self.diffusion_bias_z, 2, 1)
+        tab_init_l.addWidget(bias_box)
         # Transparency of walls
         walls_box = QtWidgets.QGroupBox("Transparency of walls")
         wl = QtWidgets.QGridLayout(walls_box)
@@ -461,6 +478,13 @@ class SimulationTab(QtWidgets.QWidget):
         self.rng_seed.setValue(int(cfg.rng_seed or 0))
         # physics
         self.initial_occ.setValue(float(cfg.initial_occupancy_fraction))
+        # diffusion bias
+        try:
+            self.diffusion_bias_x.setValue(float(getattr(cfg, "diffusion_bias_x", 0.0)))
+            self.diffusion_bias_y.setValue(float(getattr(cfg, "diffusion_bias_y", 0.0)))
+            self.diffusion_bias_z.setValue(float(getattr(cfg, "diffusion_bias_z", 0.0)))
+        except Exception:
+            pass
         # Populate dynamic probabilities table (new schema)
         try:
             self._populate_probabilities_table()
@@ -514,6 +538,9 @@ class SimulationTab(QtWidgets.QWidget):
             "snapshot_schedule_mode": self.snap_mode.currentText() or "linear",
             "log_snapshot_count": int(self.log_count.value()),
             "initial_occupancy_fraction": float(self.initial_occ.value()),
+            "diffusion_bias_x": float(self.diffusion_bias_x.value()),
+            "diffusion_bias_y": float(self.diffusion_bias_y.value()),
+            "diffusion_bias_z": float(self.diffusion_bias_z.value()),
             "ruleset_name": self.ruleset_name.currentText() or "Default",
             "cuda_device_index": 0,
             "enable_early_termination": bool(self.en_early_stop.isChecked()),
