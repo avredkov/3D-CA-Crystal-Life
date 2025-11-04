@@ -2,16 +2,20 @@
   "lattice_size_x": 128,
   "lattice_size_y": 128,
   "lattice_size_z": 128,
-  "num_iterations": 80000,
-  "data_snapshot_interval_steps": 200,
-  "xyz_snapshot_interval_steps": 200,
+  "num_iterations": 20000,
+  "data_snapshot_interval_steps": 100,
+  "xyz_snapshot_interval_steps": 100,
   "xyz_save_last_only": false,
   "snapshot_schedule_mode": "linear",
   "log_snapshot_count": 100,
   "initial_occupancy_fraction": 0.15,
+  "diffusion_drift_mode": "constant",
   "diffusion_bias_x": 0.0,
   "diffusion_bias_y": 0.0,
   "diffusion_bias_z": 0.0,
+  "diffusion_bias_x_expr": "0",
+  "diffusion_bias_y_expr": "0",
+  "diffusion_bias_z_expr": "0",
   "output_dir": "./output/wellshaped",
   "enable_early_termination": false,
   "early_termination_window": 5,
@@ -36,11 +40,11 @@
     "seed_edge_length": 4
   },
   "walls": {
-    "wall_x_min": true,
-    "wall_x_max": true,
-    "wall_y_min": true,
-    "wall_y_max": true,
-    "wall_z_min": true,
-    "wall_z_max": true
+    "wall_x_min": false,
+    "wall_x_max": false,
+    "wall_y_min": false,
+    "wall_y_max": false,
+    "wall_z_min": false,
+    "wall_z_max": false
   }
 }

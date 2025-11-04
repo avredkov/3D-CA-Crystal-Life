@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 from typing import List, Tuple, Any, Dict
 import XYZ_loader as loader
+from math_utils import generate_log_points
 
 
 def create_3d_array(atom_list: List[Tuple[Any, Tuple[int, int, int], Any]], size: int) -> np.ndarray:
@@ -153,6 +154,97 @@ def _generate_histogram_data(results: Dict[str, Any], output_file: Path) -> None
     # Generated histogram data for plotting
 
 
+def _load_used_params(output_dir: Path) -> Dict[str, Any]:
+    """
+    Load and normalize used_params.json from a simulation output directory.
+
+    Args:
+        output_dir: Directory containing used_params.json
+
+    Returns:
+        Dict[str, Any]: Flattened parameters dictionary (parameters-level if present).
+    """
+    try:
+        used_params_path = output_dir / "used_params.json"
+        if used_params_path.exists():
+            with used_params_path.open("r", encoding="utf-8") as f:
+                params = json.load(f)
+            if isinstance(params, dict) and "parameters" in params and isinstance(params["parameters"], dict):
+                return params["parameters"]
+            if isinstance(params, dict):
+                return params
+    except Exception:
+        pass
+    return {}
+
+
+def _compute_expected_xyz_timesteps(output_dir: Path, num_frames: int) -> list[int]:
+    """
+    Compute expected timesteps for XYZ frames based on simulation scheduling and
+    limit to the number of frames actually present.
+
+    This mirrors snapshot logic in the simulator:
+    - log mode: frames at 0, unique int(log points in [1, iterations-1]), and include last (iterations-1)
+    - linear mode: frames at multiples of xyz_every; last is included ONLY if it's a multiple
+      or if xyz_save_last_only is true, in which case only [0, iterations-1] are saved.
+
+    Args:
+        output_dir: Simulation output directory (to read used_params.json)
+        num_frames: Number of frames in system_evolution.xyz
+
+    Returns:
+        list[int]: Timesteps for each XYZ frame, length == min(num_frames, schedule_len)
+    """
+    p = _load_used_params(output_dir)
+    iterations = int(p.get("num_iterations", 0))
+    if iterations <= 0:
+        # Fallback: simple 0.. with step 1 (clip to frames)
+        return [i for i in range(num_frames)]
+
+    last = iterations - 1
+    mode = str(p.get("snapshot_schedule_mode", "linear")).lower()
+    xyz_every = int(p.get("xyz_snapshot_interval_steps", 1))
+    save_last_only = bool(p.get("xyz_save_last_only", False))
+
+    timesteps: list[int] = []
+
+    if mode == "log":
+        log_n = int(p.get("log_snapshot_count", 100))
+        # Generate points inclusive of end; convert to int and keep within [1, last]
+        try:
+            pts = [int(x) for x in generate_log_points(1, int(iterations), max(1, log_n)).tolist()]
+        except Exception:
+            pts = []
+        # Remove out-of-range and duplicates while preserving order
+        seen = set()
+        filtered: list[int] = []
+        for v in pts:
+            if 1 <= v <= last and v not in seen:
+                seen.add(v)
+                filtered.append(v)
+        timesteps = [0] + filtered
+        if len(timesteps) == 0 or timesteps[-1] != last:
+            timesteps.append(last)
+    else:
+        if save_last_only:
+            timesteps = [0]
+            if last not in timesteps:
+                timesteps.append(last)
+        else:
+            step = max(1, xyz_every)
+            timesteps = list(range(0, iterations, step))
+            # Do NOT force-append last for linear unless cadence hits it; simulator does not save it by default
+
+    # Clip to actual number of frames present (handles early termination or dedup rounding)
+    if num_frames <= 0:
+        return []
+    if len(timesteps) >= num_frames:
+        return timesteps[:num_frames]
+    # If we computed fewer than actual frames (should be rare), pad conservatively by repeating last known step
+    padding = [timesteps[-1]] * (num_frames - len(timesteps)) if timesteps else [0] * num_frames
+    return (timesteps + padding)[:num_frames]
+
+
 def analyze_xyz_file(xyz_file_path: str, output_dir: str, lattice_size: int, 
                     target_type: int = 2, min_cluster_size: int = 1, 
                     xyz_interval: int = 1, progress_callback=None,
@@ -203,6 +295,18 @@ def analyze_xyz_file(xyz_file_path: str, output_dir: str, lattice_size: int,
         print(f"Error loading XYZ file: {e}")
         return {"error": str(e)}
     
+    # Determine effective timesteps per frame (robust against schedule mode and early stop)
+    try:
+        n_frames = len(snapshots)
+    except Exception:
+        n_frames = 0
+    computed_ts = _compute_expected_xyz_timesteps(Path(output_dir), n_frames)
+    # Validate incoming override; accept only when it matches frame count and starts with 0 for log scheduling
+    use_override = False
+    if isinstance(timesteps_override, list) and len(timesteps_override) == n_frames and n_frames > 0:
+        use_override = True
+    effective_timesteps = timesteps_override if use_override else computed_ts
+
     # Analyze each snapshot
     results = []
     cluster_data = []
@@ -213,11 +317,8 @@ def analyze_xyz_file(xyz_file_path: str, output_dir: str, lattice_size: int,
         if progress_callback:
             progress_callback()
         
-        # Calculate timestep for this snapshot
-        if timesteps_override is not None and snapshot_idx < len(timesteps_override):
-            timestep = timesteps_override[snapshot_idx]
-        else:
-            timestep = snapshot_idx * xyz_interval
+        # Calculate timestep for this snapshot using the effective schedule
+        timestep = effective_timesteps[snapshot_idx] if snapshot_idx < len(effective_timesteps) else (snapshot_idx * max(1, int(xyz_interval)))
         
         # Create 3D array
         array_3d = create_3d_array(atom_list, lattice_size)
@@ -278,7 +379,7 @@ def analyze_xyz_file(xyz_file_path: str, output_dir: str, lattice_size: int,
     # Save .dat file for time series analysis (in output directory, not subfolder)
     dat_file = Path(output_dir) / "cluster_analysis.dat"
     with open(dat_file, 'w') as f:
-        f.write("# Timestep\tNumber_of_Clusters\tMean_Cluster_Size\n")
+        f.write("Timestep\tNumber_of_Clusters\tMean_Cluster_Size\n")
         for data in cluster_data:
             f.write(f"{data['timestep']}\t{data['n_clusters']}\t{data['mean_size']:.6f}\n")
     print(f"Saved cluster analysis data: {dat_file}")

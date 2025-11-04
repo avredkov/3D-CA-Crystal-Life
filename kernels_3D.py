@@ -153,6 +153,107 @@ __global__ void diffuse_adatoms(int * atoms,  float * directions, int cycleX, in
         
                 
     }
+
+__global__ void diffuse_adatoms_spatial(int * atoms,  float * directions, int cycleX, int cycleY,int cycleZ, float * biasX_array, float * biasY_array, float * biasZ_array, int wx0, int wx1, int wy0, int wy1, int wz0, int wz1)
+    { 
+    
+             int x = 4*_X+cycleX;
+             int y = 4*_Y+cycleY;
+             int z = 4*_Z+cycleZ; 
+             int dx=0;
+             int dy=0;
+             int dz=0;
+             int hop=0;
+               
+             if (atoms[_DIF_INDEX(x,y,z)] == 1)
+             {
+                float r = directions[_DIF_INDEX(x,y,z)];
+                // Read bias values from arrays and clamp to [-1, 1] for safety
+                float biasX_val = biasX_array[_DIF_INDEX(x,y,z)];
+                float biasY_val = biasY_array[_DIF_INDEX(x,y,z)];
+                float biasZ_val = biasZ_array[_DIF_INDEX(x,y,z)];
+                float bx = (biasX_val < -1.0f) ? -1.0f : ((biasX_val > 1.0f) ? 1.0f : biasX_val);
+                float by = (biasY_val < -1.0f) ? -1.0f : ((biasY_val > 1.0f) ? 1.0f : biasY_val);
+                float bz = (biasZ_val < -1.0f) ? -1.0f : ((biasZ_val > 1.0f) ? 1.0f : biasZ_val);
+                
+                // X axis: probability range [0, 0.333)
+                // P(+x) = (1 + biasX) / 3, P(-x) = (1 - biasX) / 3 within full [0, 1) range
+                // Within X range [0, 0.333), split proportionally: +x gets (1+biasX)/2 fraction
+                if (r < 0.33333333f)
+                {
+                    float fraction_plus = (1.0f + bx) * 0.5f;  // Fraction for +x within X range [0, 0.333)
+                    float threshold_x = fraction_plus * 0.33333333f;  // Threshold within [0, 0.333)
+                    
+                    if (r < threshold_x)
+                    {
+                        dx = 1;  // +x direction
+                    }
+                    else
+                    {
+                        dx = -1;  // -x direction
+                    }
+                }
+                // Y axis: probability range [0.333, 0.666)
+                // P(+y) = (1 + biasY) / 3, P(-y) = (1 - biasY) / 3 within full [0, 1) range
+                // Within Y range [0.333, 0.666), split proportionally: +y gets (1+biasY)/2 fraction
+                else if (r < 0.66666666f)
+                {
+                    float fraction_plus = (1.0f + by) * 0.5f;  // Fraction for +y within Y range
+                    float y_range_start = 0.33333333f;
+                    float y_range_size = 0.33333333f;
+                    float threshold_y = y_range_start + fraction_plus * y_range_size;
+                    
+                    if (r < threshold_y)
+                    {
+                        dy = 1;  // +y direction
+                    }
+                    else
+                    {
+                        dy = -1;  // -y direction
+                    }
+                }
+                // Z axis: probability range [0.666, 1.0)
+                // P(+z) = (1 + biasZ) / 3, P(-z) = (1 - biasZ) / 3 within full [0, 1) range
+                // Within Z range [0.666, 1.0), split proportionally: +z gets (1+biasZ)/2 fraction
+                else
+                {
+                    float fraction_plus = (1.0f + bz) * 0.5f;  // Fraction for +z within Z range
+                    float z_range_start = 0.66666666f;
+                    float z_range_size = 0.33333333f;
+                    float threshold_z = z_range_start + fraction_plus * z_range_size;
+                    
+                    if (r < threshold_z)
+                    {
+                        dz = 1;  // +z direction
+                    }
+                    else
+                    {
+                        dz = -1;  // -z direction
+                    }
+                }
+                
+
+                int blocked = 0;
+                if (dx == -1 && x == 0 && wx0) blocked = 1;
+                if (dx ==  1 && x == _DIF_SIZE_X - 1 && wx1) blocked = 1;
+                if (dy == -1 && y == 0 && wy0) blocked = 1;
+                if (dy ==  1 && y == _DIF_SIZE_Y - 1 && wy1) blocked = 1;
+                if (dz == -1 && z == 0 && wz0) blocked = 1;
+                if (dz ==  1 && z == _DIF_SIZE_Z - 1 && wz1) blocked = 1;
+
+                if (!blocked && atoms[_DIF_INDEX(x+dx,y+dy,z+dz)] == 0 ) 
+                {
+                    hop=1; 
+                }    
+            }
+                
+           __syncthreads();  
+          atoms[_DIF_INDEX(x,y,z)] -=hop; 
+          atoms[_DIF_INDEX(x+dx,y+dy,z+dz)] +=hop; 
+          __syncthreads();
+        
+                
+    }
     
 
 __global__ void calculate_coordinations(int * atoms, int * coordination_count, int * coordination, int wx0, int wx1, int wy0, int wy1, int wz0, int wz1)

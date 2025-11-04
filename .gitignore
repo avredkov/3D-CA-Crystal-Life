@@ -1,3 +1,5 @@
+# Local MkDocs documentation site (not tracked in repo)
+/my-docs/
 # Python bytecode and caches
 __pycache__/
 *.py[cod]

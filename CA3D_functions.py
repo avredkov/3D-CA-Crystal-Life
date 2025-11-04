@@ -26,7 +26,7 @@ import random
 from scipy.ndimage import generic_filter
 import json
 import textwrap
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from save_helpers import (
     save_coordinations,
@@ -47,6 +47,89 @@ from utils.math_utils import generate_log_points
 from utils.config_utils import serialize_config_metadata
 
 
+
+
+def _evaluate_drift_expression(
+    expr: str,
+    t: int,
+    sizeX: int,
+    sizeY: int,
+    sizeZ: int,
+    total_time: Optional[int] = None,
+    x: Optional[np.ndarray] = None,
+    y: Optional[np.ndarray] = None,
+    z: Optional[np.ndarray] = None,
+) -> Union[float, np.ndarray]:
+    """
+    Evaluate a drift expression safely with restricted namespace.
+    
+    Args:
+        expr: Expression string using variables t, x, y, z, np, sizeX, sizeY, sizeZ, total_time
+        t: Current timestep
+        sizeX, sizeY, sizeZ: Lattice dimensions
+        total_time: Total number of iterations (optional)
+        x, y, z: Optional coordinate arrays (for spatial evaluation)
+        
+    Returns:
+        float for time-only expressions, np.ndarray for spatial expressions
+    """
+    # Safe namespace with only allowed functions
+    safe_dict = {
+        "np": np,
+        "t": t,
+        "sizeX": float(sizeX),
+        "sizeY": float(sizeY),
+        "sizeZ": float(sizeZ),
+        "sin": np.sin,
+        "cos": np.cos,
+        "exp": np.exp,
+        "log": np.log,
+        "sqrt": np.sqrt,
+        "abs": np.abs,
+        "max": np.maximum,
+        "min": np.minimum,
+        "tan": np.tan,
+        "asin": np.arcsin,
+        "acos": np.arccos,
+        "atan": np.arctan,
+        "atan2": np.arctan2,
+        "sinh": np.sinh,
+        "cosh": np.cosh,
+        "tanh": np.tanh,
+        "pi": np.pi,
+        "e": np.e,
+    }
+    
+    # Add total_time if provided
+    if total_time is not None:
+        safe_dict["total_time"] = float(total_time)
+    
+    # Add coordinate arrays if provided (for spatial evaluation)
+    if x is not None:
+        safe_dict["x"] = x
+    if y is not None:
+        safe_dict["y"] = y
+    if z is not None:
+        safe_dict["z"] = z
+    
+    try:
+        result = eval(expr, {"__builtins__": {}}, safe_dict)
+        # Convert to numpy array/float and clamp to [-1.0, 1.0]
+        if isinstance(result, np.ndarray):
+            result = np.clip(result.astype(np.float32), -1.0, 1.0)
+        else:
+            # If spatial coordinates were provided but result is scalar, broadcast to match coordinate shape
+            if x is not None:
+                # Broadcast scalar to match coordinate array shape
+                result = np.full_like(x, float(np.clip(float(result), -1.0, 1.0)), dtype=np.float32)
+            else:
+                result = float(np.clip(float(result), -1.0, 1.0))
+        return result
+    except Exception as e:
+        # Fallback to zero on evaluation error
+        if x is not None:
+            return np.zeros_like(x, dtype=np.float32)
+        return 0.0
 
 
 def validate_and_prepare_simulation(cfg, log_path: Path) -> None:
@@ -190,16 +273,26 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         log_count = 100
         enable_age = 0
     
-    # Diffusion bias parameters
+    # Diffusion drift mode and parameters
     try:
         cfg_params = (config_metadata or {}).get("parameters", {}) if isinstance(config_metadata, dict) else {}
+        diffusion_drift_mode = str(cfg_params.get("diffusion_drift_mode", "constant")).lower()
+        if diffusion_drift_mode not in ("constant", "time_dependent", "spatial_dependent", "both"):
+            diffusion_drift_mode = "constant"
         diffusion_bias_x = float(cfg_params.get("diffusion_bias_x", 0.0))
         diffusion_bias_y = float(cfg_params.get("diffusion_bias_y", 0.0))
         diffusion_bias_z = float(cfg_params.get("diffusion_bias_z", 0.0))
+        diffusion_bias_x_expr = cfg_params.get("diffusion_bias_x_expr") or "0"
+        diffusion_bias_y_expr = cfg_params.get("diffusion_bias_y_expr") or "0"
+        diffusion_bias_z_expr = cfg_params.get("diffusion_bias_z_expr") or "0"
     except Exception:
+        diffusion_drift_mode = "constant"
         diffusion_bias_x = 0.0
         diffusion_bias_y = 0.0
         diffusion_bias_z = 0.0
+        diffusion_bias_x_expr = "0"
+        diffusion_bias_y_expr = "0"
+        diffusion_bias_z_expr = "0"
  
                       
     # Walls configuration (non-transparent borders)
@@ -247,6 +340,17 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         calculate_event_statistics,
         calculate_states_statistics,
         calculate_coordination_statistics,
+        drift_mode,
+        bias_x_const,
+        bias_y_const,
+        bias_z_const,
+        bias_x_expr,
+        bias_y_expr,
+        bias_z_expr,
+        biasX_gpu,
+        biasY_gpu,
+        biasZ_gpu,
+        diffuse_ker_spatial,
     ):
 
         
@@ -258,10 +362,53 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
         coords=np.array(list(itertools.product(x,y,z)))
         snapshot_base = Path(path)
         
-        # Diffusion bias values (captured from outer scope)
-        bias_x = np.float32(diffusion_bias_x)
-        bias_y = np.float32(diffusion_bias_y)
-        bias_z = np.float32(diffusion_bias_z)
+        # Diffusion bias values - mode-dependent handling
+        # For constant mode, use scalar values
+        # For time-dependent, evaluate each timestep
+        # For spatial/both, pre-compute coordinate grids if needed
+        bias_x_scalar = np.float32(bias_x_const)
+        bias_y_scalar = np.float32(bias_y_const)
+        bias_z_scalar = np.float32(bias_z_const)
+        
+        # Prepare coordinate grids for spatial evaluation if needed
+        x_grid = None
+        y_grid = None
+        z_grid = None
+        if drift_mode in ("spatial_dependent", "both"):
+            # Create coordinate arrays matching diffusion grid size
+            # Note: The kernel accesses _DIF_INDEX(x,y,z) where _DIF_SIZE_X = 4*blockDim.x*gridDim.x = sizeX
+            # So for a 64×64×64 lattice, the diffusion grid accessed is 64×64×64 (same as lattice size)
+            # The kernel iterates 64 times (4×4×4 cycles) but each covers a different subgrid of the same 64×64×64 space
+            dif_sizeX = sizeX
+            dif_sizeY = sizeY
+            dif_sizeZ = sizeZ
+            x_coords = np.arange(dif_sizeX, dtype=np.float32).reshape(dif_sizeX, 1, 1)
+            y_coords = np.arange(dif_sizeY, dtype=np.float32).reshape(1, dif_sizeY, 1)
+            z_coords = np.arange(dif_sizeZ, dtype=np.float32).reshape(1, 1, dif_sizeZ)
+            # Broadcast to full grid
+            x_grid = np.broadcast_to(x_coords, (dif_sizeX, dif_sizeY, dif_sizeZ))
+            y_grid = np.broadcast_to(y_coords, (dif_sizeX, dif_sizeY, dif_sizeZ))
+            z_grid = np.broadcast_to(z_coords, (dif_sizeX, dif_sizeY, dif_sizeZ))
+        
+        # Pre-compute spatial bias arrays if mode is spatial_dependent (not both)
+        if drift_mode == "spatial_dependent":
+            bias_x_arr = _evaluate_drift_expression(bias_x_expr, 0, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+            bias_y_arr = _evaluate_drift_expression(bias_y_expr, 0, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+            bias_z_arr = _evaluate_drift_expression(bias_z_expr, 0, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+            # Ensure results are numpy arrays (handle scalar returns)
+            if not isinstance(bias_x_arr, np.ndarray):
+                bias_x_arr = np.full_like(x_grid, float(bias_x_arr), dtype=np.float32)
+            if not isinstance(bias_y_arr, np.ndarray):
+                bias_y_arr = np.full_like(y_grid, float(bias_y_arr), dtype=np.float32)
+            if not isinstance(bias_z_arr, np.ndarray):
+                bias_z_arr = np.full_like(z_grid, float(bias_z_arr), dtype=np.float32)
+            # Ensure float32 and correct shape
+            bias_x_arr = np.asarray(bias_x_arr, dtype=np.float32)
+            bias_y_arr = np.asarray(bias_y_arr, dtype=np.float32)
+            bias_z_arr = np.asarray(bias_z_arr, dtype=np.float32)
+            biasX_gpu.set(bias_x_arr)
+            biasY_gpu.set(bias_y_arr)
+            biasZ_gpu.set(bias_z_arr)
 
         # Plateau-based early termination parameters (read from config_metadata if present)
         plateau_window = 5  # number of saved data points to consider
@@ -528,21 +675,63 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
                 )
             atoms_gpu, atoms_next_gpu = atoms_next_gpu, atoms_gpu
 
+            # Update bias values for time-dependent and both modes
+            if drift_mode == "time_dependent":
+                bias_x_scalar = np.float32(_evaluate_drift_expression(bias_x_expr, i, sizeX, sizeY, sizeZ, iterations))
+                bias_y_scalar = np.float32(_evaluate_drift_expression(bias_y_expr, i, sizeX, sizeY, sizeZ, iterations))
+                bias_z_scalar = np.float32(_evaluate_drift_expression(bias_z_expr, i, sizeX, sizeY, sizeZ, iterations))
+            elif drift_mode == "both":
+                # Re-evaluate expressions with current timestep and upload to GPU
+                bias_x_arr = _evaluate_drift_expression(bias_x_expr, i, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+                bias_y_arr = _evaluate_drift_expression(bias_y_expr, i, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+                bias_z_arr = _evaluate_drift_expression(bias_z_expr, i, sizeX, sizeY, sizeZ, iterations, x_grid, y_grid, z_grid)
+                # Ensure results are numpy arrays (handle scalar returns)
+                if not isinstance(bias_x_arr, np.ndarray):
+                    bias_x_arr = np.full_like(x_grid, float(bias_x_arr), dtype=np.float32)
+                if not isinstance(bias_y_arr, np.ndarray):
+                    bias_y_arr = np.full_like(y_grid, float(bias_y_arr), dtype=np.float32)
+                if not isinstance(bias_z_arr, np.ndarray):
+                    bias_z_arr = np.full_like(z_grid, float(bias_z_arr), dtype=np.float32)
+                # Ensure float32 and correct shape
+                bias_x_arr = np.asarray(bias_x_arr, dtype=np.float32)
+                bias_y_arr = np.asarray(bias_y_arr, dtype=np.float32)
+                bias_z_arr = np.asarray(bias_z_arr, dtype=np.float32)
+                biasX_gpu.set(bias_x_arr)
+                biasY_gpu.set(bias_y_arr)
+                biasZ_gpu.set(bias_z_arr)
+            
             np.random.shuffle(coords)
             for k in range(64):
-                diffuse_ker(
-                    atoms_gpu,
-                    directions_gpu,
-                    np.int32(coords[k][0]),
-                    np.int32(coords[k][1]),
-                    np.int32(coords[k][2]),
-                    bias_x,
-                    bias_y,
-                    bias_z,
-                    wx0, wx1, wy0, wy1, wz0, wz1,
-                    grid=(int(sizeX//4),int(sizeY//4),int(sizeZ//4)),
-                    block=(1,1,1)
-                )
+                # Use spatial kernel for spatial_dependent and both modes, scalar kernel otherwise
+                if drift_mode in ("spatial_dependent", "both"):
+                    diffuse_ker_spatial(
+                        atoms_gpu,
+                        directions_gpu,
+                        np.int32(coords[k][0]),
+                        np.int32(coords[k][1]),
+                        np.int32(coords[k][2]),
+                        biasX_gpu,
+                        biasY_gpu,
+                        biasZ_gpu,
+                        wx0, wx1, wy0, wy1, wz0, wz1,
+                        grid=(int(sizeX//4),int(sizeY//4),int(sizeZ//4)),
+                        block=(1,1,1)
+                    )
+                else:
+                    # Constant or time_dependent: use scalar kernel
+                    diffuse_ker(
+                        atoms_gpu,
+                        directions_gpu,
+                        np.int32(coords[k][0]),
+                        np.int32(coords[k][1]),
+                        np.int32(coords[k][2]),
+                        bias_x_scalar,
+                        bias_y_scalar,
+                        bias_z_scalar,
+                        wx0, wx1, wy0, wy1, wz0, wz1,
+                        grid=(int(sizeX//4),int(sizeY//4),int(sizeZ//4)),
+                        block=(1,1,1)
+                    )
 
             drv.Context.synchronize()
             # Update states every timestep to keep site age accurate; only count on data cadence
@@ -745,6 +934,7 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     conway_ker = ker.get_function("conway_ker")
     conway_ker_event_calc = ker.get_function("conway_ker_event_calc")
     diffuse_ker=ker.get_function("diffuse_adatoms")
+    diffuse_ker_spatial=ker.get_function("diffuse_adatoms_spatial")
     coordinations_ker=ker.get_function("calculate_coordinations")
     analyze_neighbors=ker.get_function("analyze_neighbors")
     
@@ -787,6 +977,18 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
     atoms_gpu = gpuarray.to_gpu(atoms)
     atoms_next_gpu = gpuarray.empty_like(atoms_gpu)
     del(atoms)
+    
+    # Allocate bias arrays for spatial/both modes (size matches diffusion grid, which equals lattice size)
+    biasX_gpu = None
+    biasY_gpu = None
+    biasZ_gpu = None
+    if diffusion_drift_mode in ("spatial_dependent", "both"):
+        # The diffusion kernel uses _DIF_SIZE_X = sizeX, so bias arrays must match lattice size
+        biasX_gpu = gpuarray.zeros((sizeX, sizeY, sizeZ), dtype=np.float32)
+        biasY_gpu = gpuarray.zeros((sizeX, sizeY, sizeZ), dtype=np.float32)
+        biasZ_gpu = gpuarray.zeros((sizeX, sizeY, sizeZ), dtype=np.float32)
+        append_log(log_path, f"Allocated spatial bias arrays ({sizeX}x{sizeY}x{sizeZ})", banner)
+    
     append_log(log_path, "CA experiment started", banner)
     try:
         atoms_evolution,coordinations_evolution=calculateCA_evolution(
@@ -813,6 +1015,17 @@ def CA_3D_experiment(params, initial_atoms=None, ruleset: str = "Default", confi
             calculate_event_statistics,
             calculate_states_statistics,
             calculate_coordination_statistics,
+            diffusion_drift_mode,
+            diffusion_bias_x,
+            diffusion_bias_y,
+            diffusion_bias_z,
+            diffusion_bias_x_expr,
+            diffusion_bias_y_expr,
+            diffusion_bias_z_expr,
+            biasX_gpu,
+            biasY_gpu,
+            biasZ_gpu,
+            diffuse_ker_spatial,
         )
     except Exception as exc:  # pylint: disable=broad-except
         error_details = {

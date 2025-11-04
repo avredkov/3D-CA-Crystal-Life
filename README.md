@@ -172,6 +172,30 @@ Brief overview and measured runtimes (on an RTX 3090, 128×128×128 lattice):
   - Runtime (log): Total time ~10-15 minutes
   - Output Size: ~2.7 GB
 
+- Growth with stirring (`examples/Growth with stirring.json`)
+  - Description: well-shaped crystal growth while the system is laterally stirred in X–Y (perpendicular to Z), using drift-biased diffusion.
+  - Output folder: `output/wellshaped-strirring`
+  - Runtime: varies with lattice and stirring strength
+  - Output Size: depends on snapshot cadence
+
+- 2D Instability (`examples/2D_instability.json`)
+  - Description: quasi‑2D slab instability where a thin active layer evolves laterally; small imbalances in attachment vs diffusion amplify height fluctuations, leading to ridge/valley formation and wavelength selection.
+  - Output folder: `output/pseudo_2D`
+  - Runtime (log): Total time ~20 minutes
+  - Output Size: ~2 GB
+
+- Growth with rotation (`examples/Growth with rotation.json`)
+  - Description: crystal growth while the effective drift rotates in the X–Y plane, producing lateral motion with unstable faceting; demonstrates morphology under steady angular bias.
+  - Output folder: `output/growth-with-rotation-v2`
+  - Runtime (log): Total time ~7–10 minutes
+  - Output Size: ~1.3 GB
+
+- Growth with time dependent rotation (`examples/Growth with time dependent rotation.json`)
+  - Description: crystal growth with a non‑stationary rotation of the drift field that changes over time (clockwise/counter‑clockwise), showing how time‑varying transport modifies trajectories and transient facet responses.
+  - Output folder: `output/growth-with-time-dependent-rotation`
+  - Runtime (log): Total time ~30 minutes
+  - Output Size: ~1.3 GB
+
 Notes on space/time:
 - Disk usage depends strongly on `xyz_snapshot_interval_steps` and total steps; expect from a few MB up to tens of GB for longer runs with dense snapshots.
 - The reported runtimes are from the NVIDIA RTX 3090; your hardware and settings may differ.
@@ -305,14 +329,33 @@ Schema is defined in `config.py` with Pydantic. All keys have safe defaults unle
 - Population
   - `initial_occupancy_fraction` (float): Initial probability of a site being occupied (by mobile atom, state=1) before seeding crystalline atoms (state=2).
 - Diffusion bias
-  - `diffusion_bias_x`, `diffusion_bias_y`, `diffusion_bias_z` (float, range: -1.0 to 1.0, default: 0.0): Directional bias parameters for mobile atom diffusion along each axis. These parameters control directional drift independently for each axis.
+  - `diffusion_drift_mode` (string, one of: "constant", "time_dependent", "spatial_dependent", "both", default: "constant"): Selects how diffusion drift is calculated.
+    - **constant**: Uses fixed scalar values `diffusion_bias_x`, `diffusion_bias_y`, `diffusion_bias_z` (range: -1.0 to 1.0, default: 0.0). Fastest mode with no per-timestep overhead.
+    - **time_dependent**: Evaluates Python expressions each timestep using variable `t` (current timestep). Expressions stored in `diffusion_bias_x_expr`, `diffusion_bias_y_expr`, `diffusion_bias_z_expr`. Minimal overhead, only evaluates scalar values per timestep.
+    - **spatial_dependent**: Pre-computes 3D bias arrays from expressions using variables `x`, `y`, `z` (coordinates). Expressions evaluated once at simulation start. Higher memory usage but no per-timestep bandwidth.
+    - **both**: Combines time and spatial dependencies. Re-evaluates expressions with both `t`, `x`, `y`, `z` each timestep and uploads arrays to GPU. Most flexible but has per-timestep computation and bandwidth overhead.
+  - **Constant mode parameters**: `diffusion_bias_x`, `diffusion_bias_y`, `diffusion_bias_z` (float, range: -1.0 to 1.0, default: 0.0)
+  - **Expression mode parameters**: `diffusion_bias_x_expr`, `diffusion_bias_y_expr`, `diffusion_bias_z_expr` (string): Python expressions evaluated with restricted safe namespace.
   - **Behavior**:
     - `bias = 0.0`: Equal probability of hopping in both positive and negative directions along the axis (default, isotropic diffusion).
     - `bias = 1.0`: Only positive direction is allowed. The probability of hopping in the positive direction is 1/3 (as 2/3 are allocated for hopping along the other two axes).
     - `bias = -1.0`: Only negative direction is allowed. The probability of hopping in the negative direction is 1/3.
     - **Intermediate values**: For values between -1 and 1, probabilities are interpolated proportionally. For example, `bias = 0.5` gives 2/3 probability to the positive direction and 1/3 to the negative direction within the axis's allocation.
   - **Independence**: Biases along different axes (X, Y, Z) are completely independent. Setting `diffusion_bias_x = 1.0` only affects X-axis diffusion and does not influence Y or Z direction choices.
-  - **Use cases**: Diffusion bias is useful for simulating directional fields (electric, magnetic, or chemical gradients), surface gradients or slopes, anisotropic diffusion environments, and controlled directional transport in crystal growth.
+  - **Expression syntax**: Expressions are evaluated with safe namespace including:
+    - Variables: 
+      - `t` (timestep, int): Current iteration number (0 to total_time-1)
+      - `total_time` (int): Total number of iterations from configuration
+      - `sizeX`, `sizeY`, `sizeZ` (float): Lattice dimensions
+      - `x`, `y`, `z` (coordinates, numpy arrays for spatial modes, float for time-only): Cell coordinates (range: 0 to sizeX-1, etc.)
+    - NumPy module: `np` (numpy functions: sin, cos, exp, log, sqrt, abs, max, min, tan, asin, acos, atan, atan2, sinh, cosh, tanh, pi, e)
+    - Results are automatically clamped to [-1.0, 1.0] range
+  - **Examples**:
+    - Constant: `"diffusion_drift_mode": "constant", "diffusion_bias_x": 0.5`
+    - Time-dependent: `"diffusion_drift_mode": "time_dependent", "diffusion_bias_x_expr": "0.5*np.sin(t/100)*np.exp(-t/1000)"`
+    - Spatial-dependent: `"diffusion_drift_mode": "spatial_dependent", "diffusion_bias_x_expr": "0.5*np.sin(x/100)*np.exp(-z/1000)"`
+    - Both: `"diffusion_drift_mode": "both", "diffusion_bias_x_expr": "0.5*np.sin(x/100 + t/1000)"`
+  - **Use cases**: Diffusion bias is useful for simulating directional fields (electric, magnetic, or chemical gradients), surface gradients or slopes, anisotropic diffusion environments, rotating seeds, oscillating fields, and controlled directional transport in crystal growth.
   - The bias parameters can be set in `config.json` or adjusted via the GUI's "Initial state" tab under the "Diffusion bias" section.
 - I/O
   - `output_dir` (string, required): Output directory. Will be created if missing.

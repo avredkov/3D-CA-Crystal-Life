@@ -94,13 +94,23 @@ class SimulationConfig(BaseModel):
     # Surface/physics
     initial_occupancy_fraction: float = 0.05
     
-    # Diffusion bias parameters (range: -1.0 to 1.0)
+    # Diffusion drift mode: "constant", "time_dependent", "spatial_dependent", or "both"
+    diffusion_drift_mode: Literal["constant", "time_dependent", "spatial_dependent", "both"] = "constant"
+    
+    # Diffusion bias parameters (range: -1.0 to 1.0) - used for constant mode
     # 0 = equal probability in both directions
     # 1 = only positive direction (P=1/3)
     # -1 = only negative direction (P=1/3)
     diffusion_bias_x: float = 0.0
     diffusion_bias_y: float = 0.0
     diffusion_bias_z: float = 0.0
+    
+    # Diffusion bias expressions - used for time_dependent, spatial_dependent, or both modes
+    # Expression strings that can use variables: t (timestep), x, y, z (coordinates), np (numpy)
+    # Examples: "0.5*np.sin(t/100)", "0.5*np.sin(x/100)", "0.5*np.sin(x/100 + t/1000)"
+    diffusion_bias_x_expr: Optional[str] = None
+    diffusion_bias_y_expr: Optional[str] = None
+    diffusion_bias_z_expr: Optional[str] = None
 
     # Paths
     output_dir: str
@@ -197,13 +207,25 @@ class SimulationConfig(BaseModel):
         if not (0.0 <= float(self.early_termination_tolerance) <= 1.0):
             # Clamp into [0,1] to keep semantics of relative tolerance
             self.early_termination_tolerance = min(1.0, max(0.0, float(self.early_termination_tolerance)))
-        # Clamp diffusion bias parameters to [-1.0, 1.0]
+        # Clamp diffusion bias parameters to [-1.0, 1.0] for constant mode
         if not (-1.0 <= float(self.diffusion_bias_x) <= 1.0):
             self.diffusion_bias_x = max(-1.0, min(1.0, float(self.diffusion_bias_x)))
         if not (-1.0 <= float(self.diffusion_bias_y) <= 1.0):
             self.diffusion_bias_y = max(-1.0, min(1.0, float(self.diffusion_bias_y)))
         if not (-1.0 <= float(self.diffusion_bias_z) <= 1.0):
             self.diffusion_bias_z = max(-1.0, min(1.0, float(self.diffusion_bias_z)))
+        
+        # Validate drift mode
+        if self.diffusion_drift_mode not in ("constant", "time_dependent", "spatial_dependent", "both"):
+            self.diffusion_drift_mode = "constant"
+        
+        # Validate expressions for non-constant modes
+        if self.diffusion_drift_mode in ("time_dependent", "spatial_dependent", "both"):
+            for axis, expr in [("x", self.diffusion_bias_x_expr), ("y", self.diffusion_bias_y_expr), ("z", self.diffusion_bias_z_expr)]:
+                if expr is None or (isinstance(expr, str) and len(expr.strip()) == 0):
+                    # Set default zero expression if missing
+                    setattr(self, f"diffusion_bias_{axis}_expr", "0")
+        
         return self
 
     def to_params(self) -> list:

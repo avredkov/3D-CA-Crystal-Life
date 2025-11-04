@@ -168,17 +168,84 @@ class SimulationTab(QtWidgets.QWidget):
         occ_l.addWidget(lbl_occ, 0, 0); occ_l.addWidget(self.initial_occ, 0, 1)
         tab_init_l.addWidget(occ_box)
         # Diffusion bias
-        bias_box = QtWidgets.QGroupBox("Diffusion bias"); bias_box.setToolTip("Directional bias for mobile atom diffusion (config: diffusion_bias_*)")
-        bias_l = QtWidgets.QGridLayout(bias_box)
+        bias_box = QtWidgets.QGroupBox("Diffusion bias"); bias_box.setToolTip("Directional bias for mobile atom diffusion (config: diffusion_bias_*, diffusion_drift_mode)")
+        bias_l = QtWidgets.QVBoxLayout(bias_box)
+        
+        # Drift mode selector
+        mode_row = QtWidgets.QHBoxLayout()
+        lbl_mode = QtWidgets.QLabel("Drift mode:"); lbl_mode.setToolTip("Select how drift is calculated: constant (scalar values), time_dependent (expression with 't'), spatial_dependent (expression with 'x','y','z'), or both. config: diffusion_drift_mode")
+        self.diffusion_drift_mode = QtWidgets.QComboBox()
+        self.diffusion_drift_mode.addItems(["constant", "time_dependent", "spatial_dependent", "both"])
+        self.diffusion_drift_mode.setToolTip("config: diffusion_drift_mode")
+        mode_row.addWidget(lbl_mode)
+        mode_row.addWidget(self.diffusion_drift_mode)
+        mode_row.addStretch(1)
+        bias_l.addLayout(mode_row)
+        
+        # Constant mode inputs (QDoubleSpinBox)
+        const_box = QtWidgets.QWidget()
+        const_l = QtWidgets.QGridLayout(const_box)
         lbl_bias_x = QtWidgets.QLabel("Bias X"); lbl_bias_x.setToolTip("Directional bias for diffusion along X axis. 0=equal, 1=only +X (P=1/3), -1=only -X (P=1/3). config: diffusion_bias_x")
         lbl_bias_y = QtWidgets.QLabel("Bias Y"); lbl_bias_y.setToolTip("Directional bias for diffusion along Y axis. 0=equal, 1=only +Y (P=1/3), -1=only -Y (P=1/3). config: diffusion_bias_y")
         lbl_bias_z = QtWidgets.QLabel("Bias Z"); lbl_bias_z.setToolTip("Directional bias for diffusion along Z axis. 0=equal, 1=only +Z (P=1/3), -1=only -Z (P=1/3). config: diffusion_bias_z")
         self.diffusion_bias_x.setToolTip("config: diffusion_bias_x")
         self.diffusion_bias_y.setToolTip("config: diffusion_bias_y")
         self.diffusion_bias_z.setToolTip("config: diffusion_bias_z")
-        bias_l.addWidget(lbl_bias_x, 0, 0); bias_l.addWidget(self.diffusion_bias_x, 0, 1)
-        bias_l.addWidget(lbl_bias_y, 1, 0); bias_l.addWidget(self.diffusion_bias_y, 1, 1)
-        bias_l.addWidget(lbl_bias_z, 2, 0); bias_l.addWidget(self.diffusion_bias_z, 2, 1)
+        const_l.addWidget(lbl_bias_x, 0, 0); const_l.addWidget(self.diffusion_bias_x, 0, 1)
+        const_l.addWidget(lbl_bias_y, 1, 0); const_l.addWidget(self.diffusion_bias_y, 1, 1)
+        const_l.addWidget(lbl_bias_z, 2, 0); const_l.addWidget(self.diffusion_bias_z, 2, 1)
+        self.bias_const_widget = const_box
+        
+        # Expression mode inputs (QPlainTextEdit)
+        expr_box = QtWidgets.QWidget()
+        expr_l = QtWidgets.QGridLayout(expr_box)
+        lbl_expr_x = QtWidgets.QLabel("Bias X expression:"); lbl_expr_x.setToolTip("Python expression using t (timestep), x/y/z (coordinates), sizeX/Y/Z (dimensions), total_time, np (numpy). Example: '0.5*np.sin(t/100)'. config: diffusion_bias_x_expr")
+        lbl_expr_y = QtWidgets.QLabel("Bias Y expression:"); lbl_expr_y.setToolTip("Python expression using t (timestep), x/y/z (coordinates), sizeX/Y/Z (dimensions), total_time, np (numpy). Example: 'np.cos(y/100)/3'. config: diffusion_bias_y_expr")
+        lbl_expr_z = QtWidgets.QLabel("Bias Z expression:"); lbl_expr_z.setToolTip("Python expression using t (timestep), x/y/z (coordinates), sizeX/Y/Z (dimensions), total_time, np (numpy). Example: '0'. config: diffusion_bias_z_expr")
+        self.diffusion_bias_x_expr = QtWidgets.QPlainTextEdit()
+        self.diffusion_bias_x_expr.setPlaceholderText("0.5*np.sin(t/100)*np.exp(-t/1000)  # Example: time-dependent")
+        self.diffusion_bias_x_expr.setMaximumHeight(60)
+        self.diffusion_bias_x_expr.setToolTip("config: diffusion_bias_x_expr. Available: t (timestep), total_time, sizeX/Y/Z (lattice dimensions), x/y/z (coordinates), np (numpy)")
+        self.diffusion_bias_y_expr = QtWidgets.QPlainTextEdit()
+        self.diffusion_bias_y_expr.setPlaceholderText("np.cos(y/100)/3  # Example: spatial-dependent")
+        self.diffusion_bias_y_expr.setMaximumHeight(60)
+        self.diffusion_bias_y_expr.setToolTip("config: diffusion_bias_y_expr. Available: t (timestep), total_time, sizeX/Y/Z (lattice dimensions), x/y/z (coordinates), np (numpy)")
+        self.diffusion_bias_z_expr = QtWidgets.QPlainTextEdit()
+        self.diffusion_bias_z_expr.setPlaceholderText("0  # No bias along Z")
+        self.diffusion_bias_z_expr.setMaximumHeight(60)
+        self.diffusion_bias_z_expr.setToolTip("config: diffusion_bias_z_expr. Available: t (timestep), total_time, sizeX/Y/Z (lattice dimensions), x/y/z (coordinates), np (numpy)")
+        expr_l.addWidget(lbl_expr_x, 0, 0); expr_l.addWidget(self.diffusion_bias_x_expr, 0, 1)
+        expr_l.addWidget(lbl_expr_y, 1, 0); expr_l.addWidget(self.diffusion_bias_y_expr, 1, 1)
+        expr_l.addWidget(lbl_expr_z, 2, 0); expr_l.addWidget(self.diffusion_bias_z_expr, 2, 1)
+        self.bias_expr_widget = expr_box
+        
+        bias_l.addWidget(self.bias_const_widget)
+        bias_l.addWidget(self.bias_expr_widget)
+        
+        # Connect mode change to toggle widgets
+        def _on_drift_mode_changed(mode: str) -> None:
+            is_const = (mode == "constant")
+            self.bias_const_widget.setVisible(is_const)
+            self.bias_expr_widget.setVisible(not is_const)
+            # Update placeholders based on mode
+            if mode == "time_dependent":
+                self.diffusion_bias_x_expr.setPlaceholderText("0.5*np.sin(t/100)*np.exp(-t/total_time)  # Use 't' (timestep), 'total_time', 'sizeX/Y/Z'")
+                self.diffusion_bias_y_expr.setPlaceholderText("np.cos(t/100)/3  # Use 't' (timestep), 'total_time', 'sizeX/Y/Z'")
+                self.diffusion_bias_z_expr.setPlaceholderText("0  # No bias")
+            elif mode == "spatial_dependent":
+                self.diffusion_bias_x_expr.setPlaceholderText("0.4*(y-sizeY/2)/(sizeY/2)  # Vortex: use 'x', 'y', 'z', 'sizeX/Y/Z'")
+                self.diffusion_bias_y_expr.setPlaceholderText("-0.4*(x-sizeX/2)/(sizeX/2)  # Vortex: use 'x', 'y', 'z', 'sizeX/Y/Z'")
+                self.diffusion_bias_z_expr.setPlaceholderText("0  # No bias")
+            elif mode == "both":
+                self.diffusion_bias_x_expr.setPlaceholderText("0.5*np.sin(x/sizeX*2*np.pi + t/total_time)  # Use 't', 'x/y/z', 'sizeX/Y/Z', 'total_time'")
+                self.diffusion_bias_y_expr.setPlaceholderText("np.cos(y/sizeY*2*np.pi + t/total_time)/3  # Use 't', 'x/y/z', 'sizeX/Y/Z', 'total_time'")
+                self.diffusion_bias_z_expr.setPlaceholderText("0  # No bias")
+        try:
+            self.diffusion_drift_mode.currentTextChanged.connect(_on_drift_mode_changed)
+        except Exception:
+            pass
+        _on_drift_mode_changed("constant")  # Initialize visibility
+        
         tab_init_l.addWidget(bias_box)
         # Transparency of walls
         walls_box = QtWidgets.QGroupBox("Transparency of walls")
@@ -480,9 +547,18 @@ class SimulationTab(QtWidgets.QWidget):
         self.initial_occ.setValue(float(cfg.initial_occupancy_fraction))
         # diffusion bias
         try:
+            drift_mode = str(getattr(cfg, "diffusion_drift_mode", "constant"))
+            self.diffusion_drift_mode.setCurrentText(drift_mode)
             self.diffusion_bias_x.setValue(float(getattr(cfg, "diffusion_bias_x", 0.0)))
             self.diffusion_bias_y.setValue(float(getattr(cfg, "diffusion_bias_y", 0.0)))
             self.diffusion_bias_z.setValue(float(getattr(cfg, "diffusion_bias_z", 0.0)))
+            # Set expression fields
+            expr_x = getattr(cfg, "diffusion_bias_x_expr", None) or "0"
+            expr_y = getattr(cfg, "diffusion_bias_y_expr", None) or "0"
+            expr_z = getattr(cfg, "diffusion_bias_z_expr", None) or "0"
+            self.diffusion_bias_x_expr.setPlainText(str(expr_x))
+            self.diffusion_bias_y_expr.setPlainText(str(expr_y))
+            self.diffusion_bias_z_expr.setPlainText(str(expr_z))
         except Exception:
             pass
         # Populate dynamic probabilities table (new schema)
@@ -538,9 +614,13 @@ class SimulationTab(QtWidgets.QWidget):
             "snapshot_schedule_mode": self.snap_mode.currentText() or "linear",
             "log_snapshot_count": int(self.log_count.value()),
             "initial_occupancy_fraction": float(self.initial_occ.value()),
+            "diffusion_drift_mode": self.diffusion_drift_mode.currentText() or "constant",
             "diffusion_bias_x": float(self.diffusion_bias_x.value()),
             "diffusion_bias_y": float(self.diffusion_bias_y.value()),
             "diffusion_bias_z": float(self.diffusion_bias_z.value()),
+            "diffusion_bias_x_expr": self.diffusion_bias_x_expr.toPlainText().strip() or "0",
+            "diffusion_bias_y_expr": self.diffusion_bias_y_expr.toPlainText().strip() or "0",
+            "diffusion_bias_z_expr": self.diffusion_bias_z_expr.toPlainText().strip() or "0",
             "ruleset_name": self.ruleset_name.currentText() or "Default",
             "cuda_device_index": 0,
             "enable_early_termination": bool(self.en_early_stop.isChecked()),
